@@ -195,6 +195,7 @@ body{margin:0}
     <div class="today" id="today"></div>
     <nav class="tabs" aria-label="Secciones">
       <a href="#pedir" data-view="pedir">Hacer pedido</a>
+      <a href="#empresa" data-view="empresa">Empresas</a>
       <a href="#cocina" data-view="cocina" data-staff hidden>Cocina y caja <span class="count" id="pendCount">0</span></a>
       <a href="#menu" data-view="menu" data-staff hidden>Menú del día</a>
     </nav>
@@ -220,19 +221,11 @@ body{margin:0}
           <div class="done" id="ticketDone" hidden></div>
           <div class="stack" id="ticketForm" style="gap:14px">
           <div>
-            <div class="label">¿Quién pide?</div>
-            <div class="seg" role="group" aria-label="Tipo de cliente" style="margin-top:6px">
-              <button type="button" id="tPublico" aria-pressed="true">Público general</button>
-              <button type="button" id="tEmpresa" aria-pressed="false">Empresa</button>
-            </div>
-          </div>
-          <div id="empresaBox" class="stack" style="gap:10px" hidden>
-            <label class="field"><span>Empresa</span><select class="input" id="empresaSel"></select></label>
-            <label class="field"><span>Código de la empresa</span><input class="input" id="empresaCod" autocomplete="off" placeholder="Te lo entrega la cocinería" style="text-transform:uppercase"></label>
-            <div id="cierreNote"></div>
+            <h2 style="margin:0">Tu pedido</h2>
+            <p class="sub" style="margin:0">¿Tu empresa tiene convenio? Anótate en <a href="#empresa">Empresas</a>.</p>
           </div>
           <label class="field">
-            <span id="nombreLbl">Nombre</span>
+            <span>Nombre</span>
             <input class="input" id="nombre" placeholder="Ej: Juan Pérez" autocomplete="name">
           </label>
           <div>
@@ -245,6 +238,52 @@ body{margin:0}
           <button class="btn primary" id="confirmar" type="button" disabled>Confirmar pedido</button>
           </div>
         </aside>
+      </div>
+    </section>
+
+    <!-- PORTAL EMPRESAS -->
+    <section id="v-empresa" hidden>
+      <form class="panel login" id="empLoginForm">
+        <h2>Portal de empresas</h2>
+        <p class="sub" style="margin:0">Ingresa el código de tu empresa para anotarte en la lista de almuerzos de hoy.</p>
+        <input class="input" id="empCodigo" autocomplete="off" placeholder="Código de la empresa" style="text-transform:uppercase">
+        <div class="err" id="empLoginErr" hidden></div>
+        <button class="btn primary" type="submit">Entrar</button>
+      </form>
+
+      <div id="empMain" hidden>
+        <div class="toolbar">
+          <div><div class="label">Empresa</div><h2 id="empNombre" style="margin:0"></h2></div>
+          <div class="row" style="align-items:center"><span id="empEstado"></span><button class="btn ghost mini" id="empSalir" type="button">Cambiar empresa</button></div>
+        </div>
+        <div class="pedir" style="margin-top:14px">
+          <div class="stack">
+            <div class="panel stack" id="empForm">
+              <div>
+                <h2>Anotarme para hoy</h2>
+                <p class="sub" style="margin:0" id="empPrecio"></p>
+              </div>
+              <label class="field"><span>Nombre de quien almuerza</span><input class="input" id="empPersona" autocomplete="name" placeholder="Ej: Luis Pérez"></label>
+              <div><div class="label" style="margin-bottom:6px">Plato</div><div class="chips" id="empFondos"></div></div>
+              <div id="empAgBox" hidden><div class="label" style="margin-bottom:6px">Agregado</div><div class="chips" id="empAgs"></div></div>
+              <div class="err" id="empErr" hidden></div>
+              <button class="btn primary" id="empAnotar" type="button" disabled>Anotarme</button>
+            </div>
+            <div class="notice warn" id="empCerrado" hidden></div>
+          </div>
+          <aside class="ticket panel" aria-label="Lista de hoy">
+            <div><h2 style="margin:0">Lista de hoy</h2><p class="sub" style="margin:0" id="empListaSub"></p></div>
+            <div class="breakdown" id="empResumen"></div>
+            <ul class="lines" id="empLista"></ul>
+            <div class="total"><span>Total del día</span><span id="empTotal">$0</span></div>
+            <div class="sub" style="margin:0">Se carga a la cuenta mensual de la empresa.</div>
+          </aside>
+        </div>
+        <div class="panel" style="margin-top:24px;max-width:560px">
+          <h3>Consumo del mes</h3>
+          <label class="field" style="margin-bottom:8px"><span>Mes</span><input class="input" type="month" id="empMes"></label>
+          <table id="empMesTabla"></table>
+        </div>
       </div>
     </section>
 
@@ -319,13 +358,13 @@ body{margin:0}
             <div class="grid2">
               <label class="field"><span>Colación normal</span><input class="input" type="number" min="0" step="100" id="cfgPrecio"></label>
               <label class="field"><span>Recargo hipocalórico</span><input class="input" type="number" min="0" step="100" id="cfgHipo"></label>
-              <label class="field"><span>Cierre reservas de empresa</span><input class="input" type="time" id="cfgCierre"></label>
+              <label class="field"><span>Cierre de listas de empresa</span><input class="input" type="time" id="cfgCierre"></label>
               <label class="field"><span>PIN nuevo (opcional)</span><input class="input" type="password" id="cfgPin" autocomplete="new-password" placeholder="Mínimo 4 dígitos"></label>
             </div>
           </div>
           <div class="panel">
             <h2>Empresas con convenio</h2>
-            <p class="sub">Entrega a cada empresa su código. Sin el código no pueden cargar almuerzos a su cuenta.</p>
+            <p class="sub">Entrega a cada empresa su código. Con él entran al portal "Empresas" y anotan a su gente cada día.</p>
             <div id="empresasEdit"></div>
             <div class="row" style="margin-top:12px">
               <input class="input grow" id="nuevaEmpresa" placeholder="Nombre de la empresa">
@@ -377,7 +416,7 @@ function showErr(el, msg) { el.textContent = msg || ''; el.hidden = !msg; }
 
 /* ═════════════ PEDIR ═════════════ */
 let M = null;                                  // menú de hoy desde el servidor
-const D = { tipo: 'publico', sel: null, agregado: null, hipo: false, cant: 1, para: '', cart: [], enviando: false };
+const D = { sel: null, agregado: null, hipo: false, cant: 1, para: '', cart: [], enviando: false };
 
 const precioItem = i => M.cfg.precio + (i.hipo ? M.cfg.hipo : 0);
 const totalItems = items => items.reduce((s, i) => s + (i.precio != null ? i.precio : precioItem(i)) * i.cant, 0);
@@ -448,18 +487,6 @@ function renderBuilder() {
 }
 
 function renderTicket() {
-  $('tPublico').setAttribute('aria-pressed', D.tipo === 'publico');
-  $('tEmpresa').setAttribute('aria-pressed', D.tipo === 'empresa');
-  $('tEmpresa').disabled = !M.empresas.length;
-  $('empresaBox').hidden = D.tipo !== 'empresa';
-  const sel = $('empresaSel'), cur = sel.value;
-  sel.innerHTML = M.empresas.map(e => `<option value="${esc(e.id)}">${esc(e.nombre)}</option>`).join('');
-  if (M.empresas.some(e => e.id === cur)) sel.value = cur;
-  const abierta = M.cfg.empresasAbiertas;
-  $('cierreNote').innerHTML = abierta
-    ? `<div class="notice ok">Reservas abiertas hasta las ${esc(M.cfg.cierre)}</div>`
-    : `<div class="notice warn">Las reservas de empresa cerraron a las ${esc(M.cfg.cierre)}. Pide como público general según lo que quede disponible.</div>`;
-  $('nombreLbl').textContent = D.tipo === 'empresa' ? 'Quién hace el pedido' : 'Nombre';
   const ul = $('lines');
   ul.innerHTML = D.cart.length ? D.cart.map((i, k) => {
     const f = fondoM(i.fondoId), extra = i.hipo ? 'Hipocalórico' : (i.agregado ? 'con ' + i.agregado : '');
@@ -467,27 +494,24 @@ function renderTicket() {
   }).join('') : '<li class="empty" style="display:block;border:0">Elige un plato del menú para empezar.</li>';
   ul.querySelectorAll('.x').forEach(b => b.onclick = () => { D.cart.splice(+b.dataset.k, 1); renderPedir(); });
   $('total').textContent = clp(totalItems(D.cart));
-  $('pagoNote').textContent = D.tipo === 'empresa' ? 'Se carga a la cuenta mensual de la empresa.' : 'Se paga al retirar.';
-  $('confirmar').disabled = D.enviando || !D.cart.length || (D.tipo === 'empresa' && !abierta);
+  $('pagoNote').textContent = 'Se paga al retirar.';
+  $('confirmar').disabled = D.enviando || !D.cart.length;
   $('confirmar').textContent = D.enviando ? 'Enviando…' : 'Confirmar pedido';
 }
 function renderPedir() { if (!M) return; renderFondos(); renderBuilder(); renderTicket(); }
 
-$('tPublico').onclick = () => { D.tipo = 'publico'; renderTicket(); };
-$('tEmpresa').onclick = () => { D.tipo = 'empresa'; renderTicket(); };
 $('confirmar').onclick = () => {
   const nombre = $('nombre').value.trim();
   if (!nombre) { showErr($('pedirErr'), 'Escribe el nombre de quien pide.'); $('nombre').focus(); return; }
-  if (D.tipo === 'empresa' && !$('empresaCod').value.trim()) { showErr($('pedirErr'), 'Escribe el código de la empresa.'); $('empresaCod').focus(); return; }
   showErr($('pedirErr'), ''); D.enviando = true; renderTicket();
-  call('pedir', { tipo: D.tipo, empresaId: $('empresaSel').value, codigo: $('empresaCod').value, cliente: nombre, items: D.cart })
+  call('pedir', { cliente: nombre, items: D.cart })
     .then(r => {
       D.enviando = false;
       if (!r.ok) { if (r.menu) { M = r.menu; } renderPedir(); showErr($('pedirErr'), r.error); return; }
       D.cart = []; D.sel = null;
       $('ticketDone').innerHTML = `<div class="big">✓</div><h2>Pedido #${r.pedido.n} recibido</h2>
         <p class="sub" style="margin:0">${esc(nombre)} · ${esc(r.pedido.hora)} · ${clp(r.pedido.total)}</p>
-        <p class="sub">${D.tipo === 'empresa' ? 'Quedó cargado a la cuenta de la empresa.' : 'Paga al retirar en el local.'}</p>
+        <p class="sub">Paga al retirar en el local.</p>
         <button type="button" class="btn" id="otroPedido">Hacer otro pedido</button>`;
       $('ticketForm').hidden = true; $('ticketDone').hidden = false;
       $('otroPedido').onclick = () => { $('ticketDone').hidden = true; $('ticketForm').hidden = false; $('nombre').value = ''; renderPedir(); };
@@ -495,6 +519,96 @@ $('confirmar').onclick = () => {
     })
     .catch(e => { D.enviando = false; renderTicket(); showErr($('pedirErr'), 'No se pudo enviar: ' + e.message); });
 };
+
+/* ═════════════ PORTAL EMPRESAS ═════════════ */
+const EMP_KEY = 'sraJake.empresa', PERSONA_KEY = 'sraJake.persona';
+let ES = null;                                  // estado de la lista de hoy de la empresa
+const ED = { fondoId: null, agregado: null, hipo: false, enviando: false };
+const lsGet = k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
+const lsSet = (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) {} };
+function empCod() { return ES ? ES._codigo : ''; }
+
+function empEntrar(codigo, silencioso) {
+  return call('empresaEntrar', { codigo }).then(r => {
+    if (!r.ok) { if (!silencioso) showErr($('empLoginErr'), r.error); else { lsSet(EMP_KEY, ''); ES = null; } renderEmpresa(); return; }
+    r._codigo = codigo; ES = r; lsSet(EMP_KEY, codigo); showErr($('empLoginErr'), '');
+    renderEmpresa(); empCargarMes();
+  }).catch(e => showErr($('empLoginErr'), e.message));
+}
+function empAplicar(r) {
+  if (r.empresa) { r._codigo = empCod(); ES = r; }
+  showErr($('empErr'), r.ok ? '' : r.error);
+  renderEmpresa();
+}
+function renderEmpresa() {
+  $('empLoginForm').hidden = !!ES; $('empMain').hidden = !ES;
+  if (!ES) return;
+  const m = ES.menu;
+  $('empNombre').textContent = ES.empresa.nombre;
+  $('empEstado').innerHTML = ES.abierta ? `<span class="pill ok">Abierta hasta las ${esc(ES.cierre)}</span>` : '<span class="pill bad">Lista cerrada</span>';
+  $('empPrecio').textContent = `Colación ${clp(m.cfg.precio)} · Hipocalórico ${clp(m.cfg.precio + m.cfg.hipo)} · incluye sopa, ensalada, pan y jugo`;
+  $('empForm').hidden = !ES.abierta;
+  $('empCerrado').hidden = ES.abierta; $('empCerrado').textContent = ES.motivo + (ES.abierta ? '' : ' Si necesitas un almuerzo extra, pídelo como público general.');
+  if (!$('empPersona').value) $('empPersona').value = lsGet(PERSONA_KEY);
+
+  const f = m.fondos.find(x => x.id === ED.fondoId);
+  if (f && f.disponible === 0) ED.fondoId = null;
+  $('empFondos').innerHTML = m.fondos.map(x => `<button type="button" class="chip" data-fid="${esc(x.id)}" aria-pressed="${ED.fondoId === x.id}" ${x.disponible === 0 ? 'disabled' : ''}>${esc(x.nombre)} <small>${x.disponible === 0 ? 'agotado' : 'quedan ' + x.disponible}</small></button>`).join('') || '<span class="sub">Todavía no está cargado el menú de hoy.</span>';
+  $('empFondos').querySelectorAll('[data-fid]').forEach(b => b.onclick = () => { ED.fondoId = b.dataset.fid; ED.agregado = null; ED.hipo = false; renderEmpresa(); });
+  const sel = m.fondos.find(x => x.id === ED.fondoId);
+  $('empAgBox').hidden = !sel || !sel.agregado;
+  if (sel && sel.agregado) {
+    $('empAgs').innerHTML = m.agregados.map(a => `<button type="button" class="chip" data-ag="${esc(a)}" aria-pressed="${!ED.hipo && ED.agregado === a}">${esc(a)}</button>`).join('') +
+      `<button type="button" class="chip" data-hipo="1" aria-pressed="${ED.hipo}">Hipocalórico <small>+${clp(m.cfg.hipo)}</small></button>`;
+    $('empAgs').querySelectorAll('[data-ag]').forEach(b => b.onclick = () => { ED.agregado = b.dataset.ag; ED.hipo = false; renderEmpresa(); });
+    $('empAgs').querySelector('[data-hipo]').onclick = () => { ED.hipo = !ED.hipo; if (ED.hipo) ED.agregado = null; renderEmpresa(); };
+  }
+  const listo = sel && (!sel.agregado || ED.hipo || ED.agregado);
+  $('empAnotar').disabled = !listo || ED.enviando;
+  $('empAnotar').textContent = ED.enviando ? 'Anotando…' : listo ? `Anotarme · ${clp(m.cfg.precio + (ED.hipo ? m.cfg.hipo : 0))}` : 'Anotarme';
+
+  const L = ES.lista;
+  const total = L.reduce((s, i) => s + i.precio * i.cant, 0), n = L.reduce((s, i) => s + i.cant, 0);
+  $('empListaSub').textContent = n ? `${n} ${n === 1 ? 'almuerzo' : 'almuerzos'}${ES.pedido ? ' · pedido #' + ES.pedido.n : ''}` : 'Nadie se ha anotado todavía.';
+  const by = {}; L.forEach(i => by[i.fondo] = (by[i.fondo] || 0) + i.cant);
+  $('empResumen').innerHTML = Object.entries(by).map(([k, v]) => `<span class="pill neutral">${esc(k)} ${v}</span>`).join('');
+  $('empLista').innerHTML = L.map(i => `<li><div class="what"><b>${esc(i.nombre)}</b><span>${esc(i.fondo)}${i.hipo ? ' · Hipocalórico' : i.agregado ? ' · ' + esc(i.agregado) : ''}</span></div><span>${clp(i.precio * i.cant)}</span>${ES.abierta ? `<button type="button" class="x" data-item="${esc(i.itemId)}" aria-label="Quitar a ${esc(i.nombre)}">×</button>` : '<span></span>'}</li>`).join('');
+  $('empLista').querySelectorAll('[data-item]').forEach(b => b.onclick = () => {
+    b.disabled = true;
+    call('empresaQuitar', { codigo: empCod(), itemId: b.dataset.item }).then(r => { empAplicar(r); if (r.ok) { toast('Quitado de la lista'); empCargarMes(); } }).catch(e => { b.disabled = false; toast(e.message); });
+  });
+  $('empTotal').textContent = clp(total);
+}
+$('empLoginForm').addEventListener('submit', e => { e.preventDefault(); const c = $('empCodigo').value.trim().toUpperCase(); if (c) empEntrar(c); });
+$('empSalir').onclick = () => { ES = null; lsSet(EMP_KEY, ''); $('empCodigo').value = ''; renderEmpresa(); };
+$('empAnotar').onclick = () => {
+  const nombre = $('empPersona').value.trim();
+  if (!nombre) { showErr($('empErr'), 'Escribe el nombre de quien almuerza.'); $('empPersona').focus(); return; }
+  if (ES.lista.some(i => i.nombre.toLowerCase() === nombre.toLowerCase()) && !ED.confirmaRepetido) {
+    ED.confirmaRepetido = true; showErr($('empErr'), `${nombre} ya está en la lista. Presiona "Anotarme" otra vez para agregar otro almuerzo a su nombre.`); return;
+  }
+  ED.confirmaRepetido = false; ED.enviando = true; renderEmpresa();
+  call('empresaAnotar', { codigo: empCod(), nombre, items: [{ fondoId: ED.fondoId, agregado: ED.agregado, hipo: ED.hipo, cant: 1 }] })
+    .then(r => {
+      ED.enviando = false;
+      if (r.ok) { lsSet(PERSONA_KEY, nombre); ED.fondoId = null; ED.agregado = null; ED.hipo = false; toast(nombre + ' quedó anotado'); empCargarMes(); }
+      empAplicar(r);
+    })
+    .catch(e => { ED.enviando = false; renderEmpresa(); showErr($('empErr'), 'No se pudo anotar: ' + e.message); });
+};
+$('empPersona').oninput = () => { ED.confirmaRepetido = false; showErr($('empErr'), ''); };
+function empCargarMes() {
+  if (!ES) return;
+  call('empresaMes', { codigo: empCod(), mes: $('empMes').value }).then(r => {
+    if (!r.ok) return;
+    const fmt = f => new Date(f + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+    $('empMesTabla').innerHTML = '<tr><th>Día</th><th class="n">Almuerzos</th><th class="n">Monto</th></tr>' +
+      (r.dias.length ? r.dias.map(d => `<tr><td>${esc(fmt(d.fecha))}</td><td class="n">${d.colaciones}</td><td class="n">${clp(d.total)}</td></tr>`).join('') +
+        `<tr><th>Total del mes</th><th class="n">${r.dias.reduce((s, d) => s + d.colaciones, 0)}</th><th class="n">${clp(r.dias.reduce((s, d) => s + d.total, 0))}</th></tr>`
+        : '<tr><td colspan="3" class="sub">Sin almuerzos este mes.</td></tr>');
+  });
+}
+$('empMes').onchange = empCargarMes;
 
 /* ═════════════ LOGIN ═════════════ */
 $('loginForm').addEventListener('submit', e => {
@@ -550,7 +664,7 @@ function renderCocina() {
     return `<article class="order ${esc(o.estado)}">
       <div class="num">#${o.n}<small>${esc(o.hora)}</small></div>
       <div style="min-width:0"><div class="who">${esc(o.tipo === 'empresa' ? o.empresa : o.cliente)}</div>
-        <div class="sub" style="margin:0">${o.tipo === 'empresa' ? esc(o.cliente) + ' · Empresa' : 'Público general · paga al retirar'}</div>
+        <div class="sub" style="margin:0">${o.tipo === 'empresa' ? 'Lista de la empresa · ' + cnt([o]) + ' almuerzos' : 'Público general · paga al retirar'}</div>
         <ul>${o.items.map(i => `<li>${i.cant} × ${esc(i.fondo)}${i.hipo ? ' — Hipocalórico' : i.agregado ? ' — ' + esc(i.agregado) : ''}${i.para ? ' <span class="sub">(' + esc(i.para) + ')</span>' : ''}</li>`).join('')}</ul></div>
       <div class="side"><span class="pill ${S.c}">${S.t}</span><b>${clp(o.total)}</b>
         <button type="button" class="btn" data-o="${esc(o.id)}" data-e="${S.next}">${S.btn}</button>
@@ -617,7 +731,7 @@ function renderMenu() {
     <input class="input" data-k="${k}" data-e="nombre" value="${esc(e.nombre)}" aria-label="Nombre de la empresa">
     <input class="input" data-k="${k}" data-e="codigo" value="${esc(e.codigo)}" aria-label="Código" placeholder="Se genera solo" style="text-transform:uppercase">
     <button type="button" class="x" data-del="${k}" aria-label="Quitar ${esc(e.nombre)}">×</button>
-  </div>`).join('') + '<div class="sub" style="margin:8px 0 0">Nombre · código para reservar</div>' : '<span class="sub">Aún no hay empresas.</span>';
+  </div>`).join('') + '<div class="sub" style="margin:8px 0 0">Nombre · código para entrar al portal de empresas</div>' : '<span class="sub">Aún no hay empresas.</span>';
   $('empresasEdit').querySelectorAll('[data-e]').forEach(inp => inp.onchange = () => { E.empresas[+inp.dataset.k][inp.dataset.e] = inp.value; setDirty(true); });
   $('empresasEdit').querySelectorAll('[data-del]').forEach(b => b.onclick = () => { E.empresas.splice(+b.dataset.del, 1); setDirty(true); renderMenu(); });
 
@@ -649,7 +763,7 @@ $('guardar').onclick = () => {
 };
 
 /* ═════════════ NAVEGACIÓN ═════════════ */
-const VIEWS = ['pedir', 'cocina', 'menu', 'login'];
+const VIEWS = ['pedir', 'empresa', 'cocina', 'menu', 'login'];
 function route() {
   let v = location.hash.slice(1); if (!VIEWS.includes(v) || v === 'login') v = 'pedir';
   const logged = !!getPin();
@@ -660,6 +774,7 @@ function route() {
   document.querySelectorAll('nav.tabs a').forEach(a => a.dataset.view === v ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
   if (logged && (v === 'cocina' || v === 'menu') && !P) { cargarPanel().catch(e => toast(e.message)); cargarCuentas(); }
   if (show === 'login') setTimeout(() => $('pin').focus(), 0);
+  if (v === 'empresa' && !ES) { const c = new URLSearchParams(location.search).get('empresa') || lsGet(EMP_KEY); if (c) { $('empCodigo').value = c; empEntrar(c.toUpperCase(), true); } }
 }
 window.addEventListener('hashchange', route);
 window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
@@ -669,11 +784,12 @@ setInterval(() => {
   if (document.hidden) return;
   const v = location.hash.slice(1);
   if (getPin() && v === 'cocina') cargarPanel().catch(() => {});
+  else if (v === 'empresa' && ES && !ED.enviando) call('empresaEntrar', { codigo: empCod() }).then(r => { if (r.ok) empAplicar(r); }).catch(() => {});
   else if (!D.enviando && (v === '' || v === 'pedir')) cargarMenu();
 }, 20000);
 
 const hoyISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
-$('fechaPanel').value = hoyISO; $('mesCuentas').value = hoyISO.slice(0, 7);
+$('fechaPanel').value = hoyISO; $('mesCuentas').value = $('empMes').value = hoyISO.slice(0, 7);
 $('today').textContent = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Santiago' });
 route(); cargarMenu();
 </script>

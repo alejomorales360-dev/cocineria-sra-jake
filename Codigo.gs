@@ -16,13 +16,14 @@
 // AGREGADOS   A:NOMBRE  B:ACTIVO
 //
 // EMPRESAS    A:ID  B:NOMBRE  C:CODIGO  D:ACTIVA
-//   (el código se lo das a la empresa para que pueda reservar a su cuenta)
+//   (el código se lo das a la empresa para que entre a su portal y anote a su gente)
 //
 // PEDIDOS     A:ID  B:N  C:FECHA  D:HORA  E:TIPO  F:EMPRESA_ID  G:EMPRESA
 //             H:CLIENTE  I:ESTADO  J:TOTAL  K:PAGO  L:CREADO
 //
 // ITEMS       A:PEDIDO_ID  B:FECHA  C:FONDO_ID  D:FONDO  E:AGREGADO
-//             F:HIPOCALORICO  G:CANTIDAD  H:PARA  I:PRECIO_UNIT  J:SUBTOTAL
+//             F:HIPOCALORICO  G:CANTIDAD  H:PARA  I:PRECIO_UNIT  J:SUBTOTAL  K:ITEM_ID
+//   (en las listas de empresa, PARA es el nombre del trabajador que se anotó)
 //
 // ════════════════════════════════════════════════════════════════
 
@@ -34,7 +35,7 @@ const HEADERS = {
   AGREGADOS: ['NOMBRE','ACTIVO'],
   EMPRESAS:  ['ID','NOMBRE','CODIGO','ACTIVA'],
   PEDIDOS:   ['ID','N','FECHA','HORA','TIPO','EMPRESA_ID','EMPRESA','CLIENTE','ESTADO','TOTAL','PAGO','CREADO'],
-  ITEMS:     ['PEDIDO_ID','FECHA','FONDO_ID','FONDO','AGREGADO','HIPOCALORICO','CANTIDAD','PARA','PRECIO_UNIT','SUBTOTAL']
+  ITEMS:     ['PEDIDO_ID','FECHA','FONDO_ID','FONDO','AGREGADO','HIPOCALORICO','CANTIDAD','PARA','PRECIO_UNIT','SUBTOTAL','ITEM_ID']
 };
 const ESTADOS = ['pendiente','listo','entregado','anulado'];
 
@@ -65,7 +66,7 @@ function doPost(e){
 
 // Llamado por fetch (GitHub Pages) y por google.script.run (cuando se abre desde Apps Script).
 function api(action, payload){
-  const publicas = { menu: getMenu, pedir: crearPedido };
+  const publicas = { menu: getMenu, pedir: crearPedido, empresaEntrar: empresaEntrar, empresaAnotar: empresaAnotar, empresaQuitar: empresaQuitar, empresaMes: empresaMes };
   const cocina   = { panel: getPanel, estado: cambiarEstado, guardarMenu: guardarMenu, cuentas: getCuentas, login: function(){ return { ok:true }; } };
   try {
     if (publicas[action]) return publicas[action](payload || {});
@@ -186,71 +187,195 @@ function getMenu(){
   return {
     ok: true,
     fecha: hoy_(), hora: ahora_(),
-    cfg: { precio:c.precio, hipo:c.hipo, cierre:c.cierre, empresasAbiertas: ahora_() <= c.cierre },
+    cfg: { precio:c.precio, hipo:c.hipo, cierre:c.cierre },
     fondos: fondos_(true).map(function(f){
       return { id:f.id, nombre:f.nombre, agregado:f.agregado, cupo:f.cupo, disponible: Math.max(0, f.cupo - (vend[f.id] || 0)) };
     }),
-    agregados: agregados_(),
-    empresas: empresas_().filter(function(e){ return e.activa; }).map(function(e){ return { id:e.id, nombre:e.nombre }; })
+    agregados: agregados_()
   };
 }
 
-// payload: { tipo:'publico'|'empresa', empresaId, codigo, cliente, items:[{fondoId, agregado, hipo, cant, para}] }
+// Valida los platos pedidos contra el menú y el cupo de hoy. Debe llamarse con el lock tomado.
+// Devuelve { limpios:[...] } o { error, menu }.
+function validarItems_(items, c){
+  const fondos = {}; fondos_(true).forEach(function(f){ fondos[f.id] = f; });
+  const ags = agregados_();
+  const vend = vendidosHoy_();
+  const pide = {}, limpios = [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i], f = fondos[it.fondoId];
+    const cant = Math.floor(Number(it.cant));
+    if (!f) return { error:'Un plato del pedido ya no está en el menú.' };
+    if (!(cant >= 1 && cant <= 200)) return { error:'Cantidad inválida para ' + f.nombre + '.' };
+    const hipo = f.agregado && !!it.hipo;   // hipocalórico = sin agregado, solo aplica a platos que lo llevan
+    let agregado = '';
+    if (f.agregado && !hipo) {
+      agregado = String(it.agregado || '');
+      if (ags.indexOf(agregado) < 0) return { error:'Elige un agregado para ' + f.nombre + '.' };
+    }
+    pide[f.id] = (pide[f.id] || 0) + cant;
+    limpios.push({ f:f, cant:cant, hipo:hipo, agregado:agregado, para:String(it.para || '').trim().slice(0, 60), precio: c.precio + (hipo ? c.hipo : 0) });
+  }
+  for (const id in pide) {
+    const disp = fondos[id].cupo - (vend[id] || 0);
+    if (pide[id] > disp) return { error: disp > 0 ? 'Solo quedan ' + disp + ' de ' + fondos[id].nombre + '.' : fondos[id].nombre + ' está agotado.', menu:getMenu() };
+  }
+  return { limpios:limpios };
+}
+
+function agregarItems_(pedidoId, fecha, limpios){
+  const it = limpios.map(function(x){ return [pedidoId, fecha, x.f.id, x.f.nombre, x.agregado, x.hipo, x.cant, x.para, x.precio, x.precio * x.cant, uid_()]; });
+  const shI = sheet_(SH.ITEMS);
+  shI.getRange(shI.getLastRow() + 1, 1, it.length, it[0].length).setValues(it);
+  return it.map(function(r){ return r[10]; });
+}
+
+function nuevoPedido_(tipo, empresa, cliente, total){
+  const fecha = hoy_(), hora = ahora_(), id = uid_();
+  const n = rows_(SH.PEDIDOS).filter(function(r){ return fecha_(r[2]) === fecha; }).length + 1;
+  sheet_(SH.PEDIDOS).appendRow([id, n, fecha, hora, tipo, empresa ? empresa.id : '', empresa ? empresa.nombre : '', cliente, 'pendiente', total,
+    tipo === 'empresa' ? 'cuenta empresa' : 'al retirar', new Date()]);
+  return { id:id, n:n, fecha:fecha, hora:hora };
+}
+
+// Pedido del público general. payload: { cliente, items:[{fondoId, agregado, hipo, cant, para}] }
 function crearPedido(p){
   const items = Array.isArray(p.items) ? p.items : [];
   if (!items.length) return { ok:false, error:'El pedido no tiene almuerzos.' };
   const cliente = String(p.cliente || '').trim().slice(0, 80);
   if (!cliente) return { ok:false, error:'Falta el nombre de quien pide.' };
-  const tipo = p.tipo === 'empresa' ? 'empresa' : 'publico';
   const c = cfg_();
-
-  let empresa = null;
-  if (tipo === 'empresa') {
-    empresa = empresas_().filter(function(e){ return e.activa && e.id === p.empresaId; })[0];
-    if (!empresa) return { ok:false, error:'Empresa no encontrada.' };
-    if (String(p.codigo || '').trim().toUpperCase() !== empresa.codigo.trim().toUpperCase()) return { ok:false, error:'El código de la empresa no es correcto.' };
-    if (ahora_() > c.cierre) return { ok:false, error:'Las reservas de empresa cerraron a las ' + c.cierre + '. Puede pedir como público general.' };
-  }
-
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const fondos = {}; fondos_(true).forEach(function(f){ fondos[f.id] = f; });
-    const ags = agregados_();
-    const vend = vendidosHoy_();
-    const pide = {};
-    const limpios = [];
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i], f = fondos[it.fondoId];
-      const cant = Math.floor(Number(it.cant));
-      if (!f) return { ok:false, error:'Un plato del pedido ya no está en el menú.' };
-      if (!(cant >= 1 && cant <= 200)) return { ok:false, error:'Cantidad inválida para ' + f.nombre + '.' };
-      const hipo = f.agregado && !!it.hipo;   // hipocalórico = sin agregado, solo aplica a platos que lo llevan
-      let agregado = '';
-      if (f.agregado && !hipo) {
-        agregado = String(it.agregado || '');
-        if (ags.indexOf(agregado) < 0) return { ok:false, error:'Elige un agregado para ' + f.nombre + '.' };
-      }
-      pide[f.id] = (pide[f.id] || 0) + cant;
-      limpios.push({ f:f, cant:cant, hipo:hipo, agregado:agregado, para:String(it.para || '').trim().slice(0, 60), precio: c.precio + (hipo ? c.hipo : 0) });
-    }
-    for (const id in pide) {
-      const disp = fondos[id].cupo - (vend[id] || 0);
-      if (pide[id] > disp) return { ok:false, error: disp > 0 ? 'Solo quedan ' + disp + ' de ' + fondos[id].nombre + '.' : fondos[id].nombre + ' está agotado.', menu:getMenu() };
-    }
-
-    const fecha = hoy_(), hora = ahora_(), id = uid_();
-    const n = rows_(SH.PEDIDOS).filter(function(r){ return fecha_(r[2]) === fecha; }).length + 1;
-    const total = limpios.reduce(function(s, x){ return s + x.precio * x.cant; }, 0);
-    sheet_(SH.PEDIDOS).appendRow([id, n, fecha, hora, tipo, empresa ? empresa.id : '', empresa ? empresa.nombre : '', cliente, 'pendiente', total,
-      tipo === 'empresa' ? 'cuenta empresa' : 'al retirar', new Date()]);
-    const it = limpios.map(function(x){ return [id, fecha, x.f.id, x.f.nombre, x.agregado, x.hipo, x.cant, x.para, x.precio, x.precio * x.cant]; });
-    const shI = sheet_(SH.ITEMS);
-    shI.getRange(shI.getLastRow() + 1, 1, it.length, it[0].length).setValues(it);
-    return { ok:true, pedido:{ id:id, n:n, hora:hora, total:total } };
+    const v = validarItems_(items, c);
+    if (v.error) return { ok:false, error:v.error, menu:v.menu };
+    const total = v.limpios.reduce(function(s, x){ return s + x.precio * x.cant; }, 0);
+    const ped = nuevoPedido_('publico', null, cliente, total);
+    agregarItems_(ped.id, ped.fecha, v.limpios);
+    return { ok:true, pedido:{ id:ped.id, n:ped.n, hora:ped.hora, total:total } };
   } finally {
     lock.releaseLock();
   }
+}
+
+// ─── Portal de empresas (requieren el código de la empresa) ─────
+//
+// Cada empresa tiene UNA lista por día (un pedido tipo "empresa").
+// Cada trabajador se anota en ella con su nombre y su plato hasta la
+// hora de cierre, o hasta que la cocina empiece a preparar la lista.
+
+function empresaPorCodigo_(codigo){
+  const c = String(codigo || '').trim().toUpperCase();
+  if (!c) return null;
+  return empresas_().filter(function(e){ return e.activa && e.codigo.trim().toUpperCase() === c; })[0] || null;
+}
+
+function listaHoyRow_(empresaId){
+  const sh = sheet_(SH.PEDIDOS), v = sh.getDataRange().getValues(), fecha = hoy_();
+  for (let i = v.length - 1; i >= 1; i--) {
+    if (String(v[i][4]) === 'empresa' && String(v[i][5]) === empresaId && fecha_(v[i][2]) === fecha && String(v[i][8]) !== 'anulado') return i + 1;
+  }
+  return 0;
+}
+
+function recalcularTotal_(pedidoId){
+  let total = 0;
+  rows_(SH.ITEMS).forEach(function(r){ if (String(r[0]) === pedidoId) total += Number(r[9]) || 0; });
+  const sh = sheet_(SH.PEDIDOS), v = sh.getDataRange().getValues();
+  for (let i = 1; i < v.length; i++) if (String(v[i][0]) === pedidoId) { sh.getRange(i + 1, 10).setValue(total); break; }
+  return total;
+}
+
+function estadoEmpresa_(empresa){
+  const c = cfg_();
+  const row = listaHoyRow_(empresa.id);
+  const ped = row ? sheet_(SH.PEDIDOS).getRange(row, 1, 1, HEADERS.PEDIDOS.length).getValues()[0] : null;
+  const estado = ped ? String(ped[8]) : 'pendiente';
+  const abierta = ahora_() <= c.cierre && estado === 'pendiente';
+  const lista = ped ? rows_(SH.ITEMS).filter(function(r){ return String(r[0]) === String(ped[0]); }).map(function(r){
+    return { itemId:String(r[10] || ''), nombre:String(r[7] || ''), fondoId:String(r[2]), fondo:String(r[3]), agregado:String(r[4] || ''), hipo:bool_(r[5]), cant:Number(r[6]) || 0, precio:Number(r[8]) || 0 };
+  }) : [];
+  return {
+    ok:true,
+    empresa:{ id:empresa.id, nombre:empresa.nombre },
+    abierta:abierta, estado:estado, cierre:c.cierre,
+    motivo: abierta ? '' : (estado !== 'pendiente' ? 'La cocina ya está preparando la lista de hoy.' : 'La lista de hoy cerró a las ' + c.cierre + '.'),
+    pedido: ped ? { id:String(ped[0]), n:Number(ped[1]), total:Number(ped[9]) || 0 } : null,
+    lista:lista,
+    menu:getMenu()
+  };
+}
+
+// payload: { codigo }
+function empresaEntrar(p){
+  const e = empresaPorCodigo_(p.codigo);
+  if (!e) return { ok:false, error:'No encontramos una empresa con ese código.' };
+  return estadoEmpresa_(e);
+}
+
+// payload: { codigo, nombre, items:[{fondoId, agregado, hipo, cant}] }
+function empresaAnotar(p){
+  const e = empresaPorCodigo_(p.codigo);
+  if (!e) return { ok:false, error:'No encontramos una empresa con ese código.' };
+  const nombre = String(p.nombre || '').trim().slice(0, 60);
+  if (!nombre) return { ok:false, error:'Escribe el nombre de quien almuerza.' };
+  const items = (Array.isArray(p.items) ? p.items : []).map(function(it){ return { fondoId:it.fondoId, agregado:it.agregado, hipo:it.hipo, cant:it.cant || 1, para:nombre }; });
+  if (!items.length) return { ok:false, error:'Elige un plato.' };
+  const c = cfg_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const st = estadoEmpresa_(e);
+    if (!st.abierta) return Object.assign(st, { ok:false, error:st.motivo });
+    const v = validarItems_(items, c);
+    if (v.error) return Object.assign(estadoEmpresa_(e), { ok:false, error:v.error });
+    const pedidoId = st.pedido ? st.pedido.id : nuevoPedido_('empresa', e, 'Lista de la empresa', 0).id;
+    agregarItems_(pedidoId, hoy_(), v.limpios);
+    recalcularTotal_(pedidoId);
+    return estadoEmpresa_(e);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// payload: { codigo, itemId }
+function empresaQuitar(p){
+  const e = empresaPorCodigo_(p.codigo);
+  if (!e) return { ok:false, error:'No encontramos una empresa con ese código.' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const st = estadoEmpresa_(e);
+    if (!st.abierta) return Object.assign(st, { ok:false, error:st.motivo });
+    if (!st.pedido) return st;
+    const sh = sheet_(SH.ITEMS), v = sh.getDataRange().getValues();
+    for (let i = v.length - 1; i >= 1; i--) {
+      if (String(v[i][10]) === String(p.itemId) && String(v[i][0]) === st.pedido.id) { sh.deleteRow(i + 1); break; }
+    }
+    recalcularTotal_(st.pedido.id);
+    return estadoEmpresa_(e);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Consumo de la empresa por día en un mes. payload: { codigo, mes:'yyyy-MM' }
+function empresaMes(p){
+  const e = empresaPorCodigo_(p.codigo);
+  if (!e) return { ok:false, error:'No encontramos una empresa con ese código.' };
+  const mes = /^\d{4}-\d{2}$/.test(p.mes || '') ? p.mes : hoy_().slice(0, 7);
+  const peds = {};
+  rows_(SH.PEDIDOS).forEach(function(r){
+    if (String(r[4]) === 'empresa' && String(r[5]) === e.id && String(r[8]) !== 'anulado' && fecha_(r[2]).slice(0, 7) === mes) peds[r[0]] = fecha_(r[2]);
+  });
+  const dias = {};
+  rows_(SH.ITEMS).forEach(function(r){
+    const f = peds[r[0]]; if (!f) return;
+    dias[f] = dias[f] || { fecha:f, colaciones:0, total:0 };
+    dias[f].colaciones += Number(r[6]) || 0; dias[f].total += Number(r[9]) || 0;
+  });
+  return { ok:true, mes:mes, dias: Object.keys(dias).sort().map(function(k){ return dias[k]; }) };
 }
 
 // ─── Cocina / administración (requieren PIN) ────────────────────

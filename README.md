@@ -2,7 +2,8 @@
 
 App web para recibir pedidos de almuerzo del día:
 
-- **Clientes** (público general y empresas con convenio) ven el menú con la disponibilidad en vivo y hacen su pedido.
+- **Público general** ve el menú con la disponibilidad en vivo y hace su pedido (paga al retirar).
+- **Portal de empresas** (`#empresa`): la empresa entra con su código y cada trabajador se anota día a día en la lista de su empresa con su plato. Ven la lista del día, pueden quitar a alguien antes del cierre y revisan su consumo del mes.
 - **Cocina y caja** ven cuántas porciones preparar de cada plato y agregado, avanzan los pedidos (pendiente → listo → entregado), ven la caja del día y la cuenta mensual de cada empresa.
 - **Menú del día**: platos, porciones disponibles, agregados, precios, hora de cierre de reservas de empresa, empresas y sus códigos.
 
@@ -20,8 +21,9 @@ Funciona con **Google Apps Script** como backend y una **planilla de Google Shee
 
 - Los platos que no llevan agregado (la cazuela) no tienen opción hipocalórica.
 - El público general paga al retirar. Las empresas cargan a su cuenta y se les cobra a fin de mes.
-- Para reservar a nombre de una empresa se necesita su **código** (se genera al agregar la empresa; entrégaselo al encargado).
-- Después de la hora de cierre, las empresas pueden pedir como público general según lo que quede.
+- Cada empresa entra al portal con su **código** (se genera al agregar la empresa; entrégaselo al encargado). También puedes mandarles el enlace directo `.../?empresa=CODIGO#empresa` (en GitHub Pages).
+- Cada empresa tiene **una lista por día**: la cocina la ve como un solo pedido con el nombre de cada persona.
+- La lista se cierra a la hora de cierre, o antes si la cocina la marca como "listo". Después, quien falte pide como público general según lo que quede.
 - Un pedido anulado devuelve sus porciones al cupo del día.
 
 ## Archivos
@@ -51,7 +53,7 @@ Puedes usar cualquiera de los dos enlaces:
 - URL `/exec` de Apps Script (funciona apenas implementas).
 - `https://<usuario>.github.io/cocineria-sra-jake/` (necesita `API_URL`).
 
-Para cocina: abre el enlace con `#cocina` al final y entra con el PIN.
+Enlaces por sección: agrega `#empresa` al final para el portal de empresas, o `#cocina` para cocina (entra con el PIN).
 
 Si cambias `Codigo.gs`, vuelve a hacer `clasp push` y crea una **nueva versión** de la implementación.
 
