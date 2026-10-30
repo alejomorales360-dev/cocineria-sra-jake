@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cocinería Sra. Jake · Pedidos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kalam:wght@700&family=Nunito:wght@400;600;700;800&display=swap">
+<style>
+/* Layout: a chalkboard header band (like the shop's menu board), then one working view at a time:
+   Pedir (menu + order ticket), Cocina (production + order queue), Menú del día (settings). */
+:root{
+  --bg:#f7f6f3; --surface:#ffffff; --ink:#1f1c19; --muted:#6a645c; --line:#e3dfd7;
+  --accent:#e9a416; --accent-soft:#fbefd2; --on-accent:#1f1c19;
+  --chalk:#24211d; --chalk-ink:#f4efe6;
+  --ok:#2e8a4b; --ok-soft:#e1f2e6; --warn:#b86200; --warn-soft:#fbeadb; --bad:#c0392b; --bad-soft:#f8e1de;
+  --display:"Kalam","Comic Sans MS",cursive;
+  --body:"Nunito",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#151311; --surface:#1f1c19; --ink:#f1ece4; --muted:#a69e93; --line:#35302a;
+  --accent:#f2b432; --accent-soft:#3a2f17; --on-accent:#1a1714;
+  --chalk:#0d0c0b; --chalk-ink:#f4efe6;
+  --ok:#5cc27c; --ok-soft:#1d3324; --warn:#f0a050; --warn-soft:#3a2a19; --bad:#ef7a6d; --bad-soft:#3b201c;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#151311; --surface:#1f1c19; --ink:#f1ece4; --muted:#a69e93; --line:#35302a;
+  --accent:#f2b432; --accent-soft:#3a2f17; --on-accent:#1a1714;
+  --chalk:#0d0c0b; --chalk-ink:#f4efe6;
+  --ok:#5cc27c; --ok-soft:#1d3324; --warn:#f0a050; --warn-soft:#3a2a19; --bad:#ef7a6d; --bad-soft:#3b201c;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5;font-variant-numeric:tabular-nums}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--chalk)}
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+/* header */
+.band{background:var(--chalk);color:var(--chalk-ink)}
+.band .wrap{padding-block:18px 0;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px}
+.brand small{display:block;font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.75}
+.brand h1{margin:0;font-family:var(--display);font-size:clamp(30px,5vw,42px);line-height:1;color:var(--accent);text-wrap:balance}
+.today{font-size:13px;opacity:.8;padding-bottom:6px}
+nav.tabs{display:flex;gap:4px;width:100%;overflow-x:auto;margin-top:6px}
+nav.tabs a{color:var(--chalk-ink);text-decoration:none;padding:10px 16px;border-radius:10px 10px 0 0;font-weight:700;opacity:.75;white-space:nowrap}
+nav.tabs a[aria-current="page"]{background:var(--bg);color:var(--ink);opacity:1}
+nav.tabs a .count{display:inline-block;min-width:20px;padding:0 6px;margin-left:6px;border-radius:10px;background:var(--accent);color:var(--on-accent);font-size:12px;text-align:center}
+
+main .wrap{padding-block:22px 48px}
+h2{font-size:20px;margin:0 0 4px;text-wrap:balance}
+h3{font-size:15px;margin:0 0 8px}
+.sub{color:var(--muted);margin:0 0 16px;font-size:14px}
+.label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 14px;font-weight:700}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.input{width:100%;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:9px 12px;min-width:0}
+
+/* Pedir */
+.pedir{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:24px;align-items:start}
+.incluye{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 16px}
+.incluye span{font-size:13px;padding:3px 10px;border-radius:20px;background:var(--accent-soft);font-weight:600}
+.fondos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.fondo{text-align:left;background:var(--surface);border:2px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.fondo:hover:not(:disabled){border-color:var(--muted)}
+.fondo[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.fondo:disabled{opacity:.55;cursor:not-allowed}
+.fondo .name{font-family:var(--display);font-size:22px;line-height:1.15}
+.fondo .meta{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.meter{height:6px;border-radius:4px;background:var(--line);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ok);border-radius:4px}
+.meter.low i{background:var(--warn)}
+.pill{display:inline-block;font-size:12px;font-weight:800;padding:2px 9px;border-radius:20px;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.neutral{background:var(--line);color:var(--ink)}
+.pill.accent{background:var(--accent-soft);color:var(--ink)}
+
+.builder{margin-top:16px;display:grid;gap:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:2px solid var(--line);background:var(--surface);border-radius:24px;padding:7px 14px;font-weight:700}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.chip small{font-weight:600;color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.row > .grow{flex:1 1 200px;min-width:0}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface)}
+.stepper button{border:0;background:transparent;width:38px;height:40px;font-size:18px;font-weight:800}
+.stepper output{min-width:34px;text-align:center;font-weight:800}
+
+.ticket{position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);display:grid;gap:14px}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg button{border:0;background:transparent;border-radius:8px;padding:8px;font-weight:700;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.notice{font-size:13px;border-radius:10px;padding:9px 12px}
+.notice.warn{background:var(--warn-soft);color:var(--warn)}
+.notice.ok{background:var(--ok-soft);color:var(--ok)}
+.lines{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.lines li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:start;padding-bottom:8px;border-bottom:1px dashed var(--line)}
+.lines .what{min-width:0}
+.lines .what b{display:block}
+.lines .what span{font-size:13px;color:var(--muted)}
+.x{border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;padding:2px 6px}
+.total{display:flex;justify-content:space-between;align-items:baseline;font-weight:800;font-size:18px}
+.empty{color:var(--muted);font-size:14px;text-align:center;padding:14px 0}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--chalk);color:var(--chalk-ink);padding:11px 18px;border-radius:12px;font-weight:700;z-index:20;max-width:calc(100% - 32px)}
+
+/* Cocina */
+.prod{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-bottom:28px}
+.prod .panel{display:grid;gap:8px}
+.big{font-size:32px;font-weight:800;line-height:1}
+.big small{font-size:14px;color:var(--muted);font-weight:600}
+.breakdown{display:flex;flex-wrap:wrap;gap:6px}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;margin-bottom:12px}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.cocina{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;align-items:start}
+.orders{display:grid;gap:10px}
+.order{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:start;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.order.pendiente{border-left-color:var(--warn)}
+.order.listo{border-left-color:var(--accent)}
+.order.entregado{border-left-color:var(--ok);opacity:.7}
+.order .num{font-weight:800;font-size:18px}
+.order .num small{display:block;font-size:12px;color:var(--muted);font-weight:600}
+.order .who{font-weight:800}
+.order ul{margin:4px 0 0;padding-left:18px;font-size:14px}
+.order .side{display:grid;gap:6px;justify-items:end;text-align:right}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+td.n,th.n{text-align:right}
+
+/* Menu settings */
+.cfg{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:start}
+.stack{display:grid;gap:18px}
+.fondo-edit{display:grid;grid-template-columns:minmax(0,1fr) 90px auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.fondo-edit label.chk{display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap}
+.field{display:grid;gap:4px}
+.field span{font-size:13px;font-weight:700}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:4px 6px 4px 12px;border-radius:20px;background:var(--bg);border:1px solid var(--line);font-weight:600;font-size:14px}
+.example{font-size:12px;color:var(--muted);font-style:italic}
+
+@media (max-width:900px){
+  .pedir,.cocina,.cfg{grid-template-columns:minmax(0,1fr)}
+  .ticket{position:static}
+}
+@media (max-width:520px){
+  .fondos{grid-template-columns:minmax(0,1fr)}
+  .fondo-edit{grid-template-columns:minmax(0,1fr) 80px auto}
+  .fondo-edit label.chk{grid-column:1 / -1;order:3}
+  .grid2{grid-template-columns:1fr}
+  .order{grid-template-columns:minmax(0,1fr)}
+  .order .side{justify-items:start;text-align:left;grid-auto-flow:column;justify-content:start;align-items:center}
+}
+@media (prefers-reduced-motion:no-preference){
+  .fondo,.chip,.btn{transition:border-color .15s,box-shadow .15s,background .15s}
+}
+</style>
+
+<style>
+body{margin:0}
+[hidden]{display:none!important}
+.foot{color:var(--muted);font-size:13px;text-align:center;padding-block:0 32px}
+.foot a{color:var(--muted)}
+.login{max-width:360px;margin:24px auto;display:grid;gap:12px}
+.order.anulado{border-left-color:var(--bad);opacity:.5}
+.order.anulado ul{text-decoration:line-through}
+.loading{color:var(--muted);padding:24px 0;text-align:center}
+.err{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:10px 12px;font-size:14px}
+.done{display:grid;gap:8px;text-align:center;padding-block:8px}
+.done .big{font-size:44px;color:var(--ok)}
+.emp-edit{display:grid;grid-template-columns:minmax(0,1fr) 110px auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)}
+.dirty{font-size:13px;color:var(--warn);font-weight:700}
+.savebar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end;margin-top:18px}
+.mini{font-size:12px;padding:5px 10px}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="wrap">
+    <div class="brand">
+      <small>Cocinería</small>
+      <h1>Sra. Jake</h1>
+    </div>
+    <div class="today" id="today"></div>
+    <nav class="tabs" aria-label="Secciones">
+      <a href="#pedir" data-view="pedir">Hacer pedido</a>
+      <a href="#cocina" data-view="cocina" data-staff hidden>Cocina y caja <span class="count" id="pendCount">0</span></a>
+      <a href="#menu" data-view="menu" data-staff hidden>Menú del día</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <!-- PEDIR -->
+    <section id="v-pedir">
+      <div class="loading" id="pedirLoading">Cargando el menú de hoy…</div>
+      <div class="pedir" id="pedirMain" hidden>
+        <div>
+          <h2>Menú de hoy</h2>
+          <p class="sub" id="precioLine"></p>
+          <div class="incluye" aria-label="Incluido en cada almuerzo"><span>Sopa</span><span>Ensalada</span><span>Pan</span><span>Vaso de jugo</span></div>
+          <div class="fondos" id="fondos"></div>
+          <div class="builder panel" id="builder" hidden></div>
+        </div>
+
+        <aside class="ticket panel" aria-label="Tu pedido" id="ticket">
+          <div class="done" id="ticketDone" hidden></div>
+          <div class="stack" id="ticketForm" style="gap:14px">
+          <div>
+            <div class="label">¿Quién pide?</div>
+            <div class="seg" role="group" aria-label="Tipo de cliente" style="margin-top:6px">
+              <button type="button" id="tPublico" aria-pressed="true">Público general</button>
+              <button type="button" id="tEmpresa" aria-pressed="false">Empresa</button>
+            </div>
+          </div>
+          <div id="empresaBox" class="stack" style="gap:10px" hidden>
+            <label class="field"><span>Empresa</span><select class="input" id="empresaSel"></select></label>
+            <label class="field"><span>Código de la empresa</span><input class="input" id="empresaCod" autocomplete="off" placeholder="Te lo entrega la cocinería" style="text-transform:uppercase"></label>
+            <div id="cierreNote"></div>
+          </div>
+          <label class="field">
+            <span id="nombreLbl">Nombre</span>
+            <input class="input" id="nombre" placeholder="Ej: Juan Pérez" autocomplete="name">
+          </label>
+          <div>
+            <div class="label" style="margin-bottom:6px">Pedido</div>
+            <ul class="lines" id="lines"></ul>
+          </div>
+          <div class="total"><span>Total</span><span id="total">$0</span></div>
+          <div class="sub" id="pagoNote" style="margin:0"></div>
+          <div class="err" id="pedirErr" hidden></div>
+          <button class="btn primary" id="confirmar" type="button" disabled>Confirmar pedido</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- LOGIN -->
+    <section id="v-login" hidden>
+      <form class="panel login" id="loginForm">
+        <h2>Acceso cocina</h2>
+        <p class="sub" style="margin:0">Ingresa el PIN para ver los pedidos y editar el menú.</p>
+        <input class="input" id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN">
+        <div class="err" id="loginErr" hidden></div>
+        <button class="btn primary" type="submit">Entrar</button>
+      </form>
+    </section>
+
+    <!-- COCINA -->
+    <section id="v-cocina" hidden>
+      <div class="toolbar">
+        <div><h2>Producción del día</h2><p class="sub" style="margin:0">Porciones pedidas por plato, con el detalle de agregados.</p></div>
+        <label class="field"><span>Día</span><input class="input" type="date" id="fechaPanel"></label>
+      </div>
+      <div class="prod" id="prod" style="margin-top:14px"></div>
+
+      <div class="cocina">
+        <div>
+          <div class="toolbar">
+            <h2 style="margin:0">Pedidos</h2>
+            <div class="filters" id="filters"></div>
+          </div>
+          <div class="orders" id="orders"></div>
+        </div>
+        <div class="stack">
+          <div class="panel">
+            <h3>Caja del día</h3>
+            <table id="caja"></table>
+          </div>
+          <div class="panel">
+            <h3>Cuenta mensual por empresa</h3>
+            <label class="field" style="margin-bottom:8px"><span>Mes</span><input class="input" type="month" id="mesCuentas"></label>
+            <table id="cuentas"></table>
+          </div>
+          <button class="btn ghost" id="salir" type="button">Cerrar sesión</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- MENU -->
+    <section id="v-menu" hidden>
+      <div class="cfg">
+        <div class="stack">
+          <div class="panel">
+            <h2>Platos de fondo</h2>
+            <p class="sub">El cupo es cuántas porciones hay para el día. Cuando se acaba, el plato aparece como agotado. Desmarca "En el menú" para ocultarlo sin borrarlo.</p>
+            <div id="fondosEdit"></div>
+            <div class="row" style="margin-top:12px">
+              <input class="input grow" id="nuevoFondo" placeholder="Nuevo plato, ej: Lentejas">
+              <button class="btn" id="addFondo" type="button">Agregar plato</button>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>Agregados</h2>
+            <p class="sub">Se eligen con los platos que llevan agregado. El hipocalórico va sin agregado.</p>
+            <div class="chips" id="agregadosEdit"></div>
+            <div class="row" style="margin-top:12px">
+              <input class="input grow" id="nuevoAgregado" placeholder="Nuevo agregado, ej: Papas fritas">
+              <button class="btn" id="addAgregado" type="button">Agregar</button>
+            </div>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="panel stack">
+            <h2>Precios y horario</h2>
+            <div class="grid2">
+              <label class="field"><span>Colación normal</span><input class="input" type="number" min="0" step="100" id="cfgPrecio"></label>
+              <label class="field"><span>Recargo hipocalórico</span><input class="input" type="number" min="0" step="100" id="cfgHipo"></label>
+              <label class="field"><span>Cierre reservas de empresa</span><input class="input" type="time" id="cfgCierre"></label>
+              <label class="field"><span>PIN nuevo (opcional)</span><input class="input" type="password" id="cfgPin" autocomplete="new-password" placeholder="Mínimo 4 dígitos"></label>
+            </div>
+          </div>
+          <div class="panel">
+            <h2>Empresas con convenio</h2>
+            <p class="sub">Entrega a cada empresa su código. Sin el código no pueden cargar almuerzos a su cuenta.</p>
+            <div id="empresasEdit"></div>
+            <div class="row" style="margin-top:12px">
+              <input class="input grow" id="nuevaEmpresa" placeholder="Nombre de la empresa">
+              <button class="btn" id="addEmpresa" type="button">Agregar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="savebar">
+        <span class="dirty" id="dirty" hidden>Hay cambios sin guardar</span>
+        <button class="btn ghost" id="descartar" type="button">Descartar</button>
+        <button class="btn primary" id="guardar" type="button">Guardar cambios</button>
+      </div>
+    </section>
+  </div>
+</main>
+<div class="wrap foot" id="foot"><a href="#cocina">Acceso cocina</a></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+// URL /exec de la implementación de Apps Script. Solo se usa cuando la página se abre
+// desde GitHub Pages; si se abre desde la URL de Apps Script se usa google.script.run.
+var API_URL = '';
+
+const PIN_KEY = 'sraJake.pin';
+const clp = n => '$' + Math.round(n || 0).toLocaleString('es-CL');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $ = id => document.getElementById(id);
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+function call(action, payload) {
+  if (window.google && google.script && google.script.run) {
+    return new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej).api(action, payload || {}));
+  }
+  if (!API_URL) return Promise.reject(new Error('Falta configurar API_URL en index.html con la URL /exec de Apps Script.'));
+  return fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, payload: payload || {} }) })
+    .then(r => r.json());
+}
+function getPin() { try { return sessionStorage.getItem(PIN_KEY) || ''; } catch (e) { return window._pin || ''; } }
+function setPin(p) { window._pin = p; try { p ? sessionStorage.setItem(PIN_KEY, p) : sessionStorage.removeItem(PIN_KEY); } catch (e) {} }
+function staff(action, payload) {
+  return call(action, Object.assign({ pin: getPin() }, payload || {})).then(r => {
+    if (r && r.auth === false) { setPin(''); route(); throw new Error('Sesión expirada'); }
+    return r;
+  });
+}
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 2800); }
+function showErr(el, msg) { el.textContent = msg || ''; el.hidden = !msg; }
+
+/* ═════════════ PEDIR ═════════════ */
+let M = null;                                  // menú de hoy desde el servidor
+const D = { tipo: 'publico', sel: null, agregado: null, hipo: false, cant: 1, para: '', cart: [], enviando: false };
+
+const precioItem = i => M.cfg.precio + (i.hipo ? M.cfg.hipo : 0);
+const totalItems = items => items.reduce((s, i) => s + (i.precio != null ? i.precio : precioItem(i)) * i.cant, 0);
+const fondoM = id => M.fondos.find(f => f.id === id);
+const enCarrito = fid => D.cart.filter(i => i.fondoId === fid).reduce((a, i) => a + i.cant, 0);
+const disponible = f => Math.max(0, f.disponible - enCarrito(f.id));
+
+function cargarMenu() {
+  return call('menu').then(r => {
+    if (!r.ok) throw new Error(r.error);
+    M = r;
+    D.cart = D.cart.filter(i => fondoM(i.fondoId));
+    $('pedirLoading').hidden = true; $('pedirMain').hidden = false;
+    renderPedir();
+  }).catch(e => { $('pedirLoading').textContent = 'No se pudo cargar el menú: ' + e.message; });
+}
+
+function renderFondos() {
+  $('precioLine').textContent = `Colación ${clp(M.cfg.precio)} · Hipocalórico ${clp(M.cfg.precio + M.cfg.hipo)} (sin arroz, tallarín ni puré)`;
+  const el = $('fondos');
+  el.innerHTML = M.fondos.length ? M.fondos.map(f => {
+    const disp = disponible(f), pct = f.cupo ? Math.round(disp / f.cupo * 100) : 0;
+    const st = disp === 0 ? '<span class="pill bad">Agotado</span>' : `<span class="pill ${disp <= 5 ? 'warn' : 'ok'}">Quedan ${disp}</span>`;
+    return `<button type="button" class="fondo" data-id="${esc(f.id)}" aria-pressed="${D.sel === f.id}" ${disp === 0 ? 'disabled' : ''}>
+      <span class="name">${esc(f.nombre)}</span>
+      <span class="meter ${disp <= 5 ? 'low' : ''}"><i style="width:${pct}%"></i></span>
+      <span class="meta"><span>${f.agregado ? 'Con agregado a elección' : 'Sin agregado'}</span>${st}</span>
+    </button>`;
+  }).join('') : '<div class="panel empty">Todavía no está cargado el menú de hoy.</div>';
+  el.querySelectorAll('.fondo').forEach(b => b.onclick = () => {
+    D.sel = b.dataset.id; D.agregado = null; D.hipo = false; D.cant = 1; renderPedir();
+    $('builder').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+}
+
+function renderBuilder() {
+  const el = $('builder'), f = D.sel && fondoM(D.sel);
+  if (!f) { el.hidden = true; return; }
+  el.hidden = false;
+  const disp = disponible(f);
+  if (D.cant > disp) D.cant = Math.max(1, disp);
+  const ok = disp > 0 && (!f.agregado || D.hipo || D.agregado);
+  const precio = M.cfg.precio + (D.hipo ? M.cfg.hipo : 0);
+  el.innerHTML = `
+    <div><div class="label">Plato elegido</div><div style="font-family:var(--display);font-size:24px">${esc(f.nombre)}</div></div>
+    ${f.agregado ? `<div><div class="label" style="margin-bottom:6px">Agregado</div><div class="chips">
+      ${M.agregados.map(a => `<button type="button" class="chip" data-ag="${esc(a)}" aria-pressed="${!D.hipo && D.agregado === a}">${esc(a)}</button>`).join('')}
+      <button type="button" class="chip" data-hipo="1" aria-pressed="${D.hipo}">Hipocalórico <small>+${clp(M.cfg.hipo)}</small></button>
+    </div></div>` : ''}
+    <div class="row">
+      <div><div class="label" style="margin-bottom:6px">Cantidad</div>
+        <div class="stepper"><button type="button" id="menos" aria-label="Menos">−</button><output>${D.cant}</output><button type="button" id="mas" aria-label="Más">+</button></div></div>
+      <label class="field grow"><span>Para quién (opcional)</span><input class="input" id="para" value="${esc(D.para)}" placeholder="Ej: Luis, bodega"></label>
+      <button type="button" class="btn primary" id="addItem" ${ok ? '' : 'disabled'}>Agregar · ${clp(precio * D.cant)}</button>
+    </div>
+    ${f.agregado && !D.hipo && !D.agregado ? '<div class="sub" style="margin:0">Elige un agregado o la opción hipocalórica.</div>' : ''}`;
+  el.querySelectorAll('[data-ag]').forEach(b => b.onclick = () => { D.agregado = b.dataset.ag; D.hipo = false; renderBuilder(); });
+  el.querySelectorAll('[data-hipo]').forEach(b => b.onclick = () => { D.hipo = !D.hipo; if (D.hipo) D.agregado = null; renderBuilder(); });
+  $('menos').onclick = () => { D.cant = Math.max(1, D.cant - 1); renderBuilder(); };
+  $('mas').onclick = () => { D.cant = Math.min(disponible(f), D.cant + 1); renderBuilder(); };
+  $('para').oninput = e => D.para = e.target.value;
+  $('addItem').onclick = () => {
+    D.cart.push({ fondoId: f.id, agregado: f.agregado && !D.hipo ? D.agregado : null, hipo: f.agregado && D.hipo, cant: D.cant, para: D.para.trim() });
+    D.para = ''; D.cant = 1; D.agregado = null; D.hipo = false;
+    if (disponible(f) === 0) D.sel = null;
+    renderPedir(); toast('Agregado al pedido');
+  };
+}
+
+function renderTicket() {
+  $('tPublico').setAttribute('aria-pressed', D.tipo === 'publico');
+  $('tEmpresa').setAttribute('aria-pressed', D.tipo === 'empresa');
+  $('tEmpresa').disabled = !M.empresas.length;
+  $('empresaBox').hidden = D.tipo !== 'empresa';
+  const sel = $('empresaSel'), cur = sel.value;
+  sel.innerHTML = M.empresas.map(e => `<option value="${esc(e.id)}">${esc(e.nombre)}</option>`).join('');
+  if (M.empresas.some(e => e.id === cur)) sel.value = cur;
+  const abierta = M.cfg.empresasAbiertas;
+  $('cierreNote').innerHTML = abierta
+    ? `<div class="notice ok">Reservas abiertas hasta las ${esc(M.cfg.cierre)}</div>`
+    : `<div class="notice warn">Las reservas de empresa cerraron a las ${esc(M.cfg.cierre)}. Pide como público general según lo que quede disponible.</div>`;
+  $('nombreLbl').textContent = D.tipo === 'empresa' ? 'Quién hace el pedido' : 'Nombre';
+  const ul = $('lines');
+  ul.innerHTML = D.cart.length ? D.cart.map((i, k) => {
+    const f = fondoM(i.fondoId), extra = i.hipo ? 'Hipocalórico' : (i.agregado ? 'con ' + i.agregado : '');
+    return `<li><div class="what"><b>${i.cant} × ${esc(f.nombre)}</b><span>${esc(extra)}${i.para ? ' · para ' + esc(i.para) : ''}</span></div><span>${clp(precioItem(i) * i.cant)}</span><button type="button" class="x" data-k="${k}" aria-label="Quitar">×</button></li>`;
+  }).join('') : '<li class="empty" style="display:block;border:0">Elige un plato del menú para empezar.</li>';
+  ul.querySelectorAll('.x').forEach(b => b.onclick = () => { D.cart.splice(+b.dataset.k, 1); renderPedir(); });
+  $('total').textContent = clp(totalItems(D.cart));
+  $('pagoNote').textContent = D.tipo === 'empresa' ? 'Se carga a la cuenta mensual de la empresa.' : 'Se paga al retirar.';
+  $('confirmar').disabled = D.enviando || !D.cart.length || (D.tipo === 'empresa' && !abierta);
+  $('confirmar').textContent = D.enviando ? 'Enviando…' : 'Confirmar pedido';
+}
+function renderPedir() { if (!M) return; renderFondos(); renderBuilder(); renderTicket(); }
+
+$('tPublico').onclick = () => { D.tipo = 'publico'; renderTicket(); };
+$('tEmpresa').onclick = () => { D.tipo = 'empresa'; renderTicket(); };
+$('confirmar').onclick = () => {
+  const nombre = $('nombre').value.trim();
+  if (!nombre) { showErr($('pedirErr'), 'Escribe el nombre de quien pide.'); $('nombre').focus(); return; }
+  if (D.tipo === 'empresa' && !$('empresaCod').value.trim()) { showErr($('pedirErr'), 'Escribe el código de la empresa.'); $('empresaCod').focus(); return; }
+  showErr($('pedirErr'), ''); D.enviando = true; renderTicket();
+  call('pedir', { tipo: D.tipo, empresaId: $('empresaSel').value, codigo: $('empresaCod').value, cliente: nombre, items: D.cart })
+    .then(r => {
+      D.enviando = false;
+      if (!r.ok) { if (r.menu) { M = r.menu; } renderPedir(); showErr($('pedirErr'), r.error); return; }
+      D.cart = []; D.sel = null;
+      $('ticketDone').innerHTML = `<div class="big">✓</div><h2>Pedido #${r.pedido.n} recibido</h2>
+        <p class="sub" style="margin:0">${esc(nombre)} · ${esc(r.pedido.hora)} · ${clp(r.pedido.total)}</p>
+        <p class="sub">${D.tipo === 'empresa' ? 'Quedó cargado a la cuenta de la empresa.' : 'Paga al retirar en el local.'}</p>
+        <button type="button" class="btn" id="otroPedido">Hacer otro pedido</button>`;
+      $('ticketForm').hidden = true; $('ticketDone').hidden = false;
+      $('otroPedido').onclick = () => { $('ticketDone').hidden = true; $('ticketForm').hidden = false; $('nombre').value = ''; renderPedir(); };
+      cargarMenu();
+    })
+    .catch(e => { D.enviando = false; renderTicket(); showErr($('pedirErr'), 'No se pudo enviar: ' + e.message); });
+};
+
+/* ═════════════ LOGIN ═════════════ */
+$('loginForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const pin = $('pin').value.trim(); if (!pin) return;
+  call('login', { pin }).then(r => {
+    if (!r.ok) { showErr($('loginErr'), 'PIN incorrecto.'); return; }
+    setPin(pin); $('pin').value = ''; showErr($('loginErr'), ''); route();
+  }).catch(err => showErr($('loginErr'), err.message));
+});
+$('salir').onclick = () => { setPin(''); location.hash = '#pedir'; route(); };
+
+/* ═════════════ COCINA ═════════════ */
+let P = null, filtro = 'todos';
+const ESTADOS = {
+  pendiente: { t: 'Pendiente', c: 'warn', next: 'listo', btn: 'Marcar listo' },
+  listo:     { t: 'Listo',     c: 'accent', next: 'entregado', btn: 'Entregar' },
+  entregado: { t: 'Entregado', c: 'ok', next: 'pendiente', btn: 'Reabrir' },
+  anulado:   { t: 'Anulado',   c: 'bad', next: 'pendiente', btn: 'Restaurar' }
+};
+const vivos = () => P.pedidos.filter(o => o.estado !== 'anulado');
+const cnt = os => os.flatMap(o => o.items).reduce((s, i) => s + i.cant, 0);
+const sum = os => os.reduce((s, o) => s + o.total, 0);
+
+function cargarPanel() {
+  return staff('panel', { fecha: $('fechaPanel').value }).then(r => { if (!r.ok) throw new Error(r.error); P = r; renderCocina(); if (!E) editarDesde(P); });
+}
+function renderCocina() {
+  if (!P) return;
+  const ped = vivos();
+  const fondosVistos = P.fondos.filter(f => f.activo || ped.some(o => o.items.some(i => i.fondoId === f.id)));
+  $('prod').innerHTML = fondosVistos.map(f => {
+    const items = ped.flatMap(o => o.items).filter(i => i.fondoId === f.id);
+    const tot = items.reduce((a, i) => a + i.cant, 0);
+    const by = {}; items.forEach(i => { const k = i.hipo ? 'Hipocalórico' : (i.agregado || 'Sin agregado'); by[k] = (by[k] || 0) + i.cant; });
+    const emp = cnt(ped.filter(o => o.tipo === 'empresa').map(o => ({ items: o.items.filter(i => i.fondoId === f.id) })));
+    const pct = f.cupo ? Math.min(100, Math.round(tot / f.cupo * 100)) : 0, libre = Math.max(0, f.cupo - tot);
+    return `<div class="panel"><div class="label">${esc(f.nombre)}</div>
+      <div class="big">${tot} <small>de ${f.cupo} porciones</small></div>
+      <div class="meter ${libre <= 5 ? 'low' : ''}"><i style="width:${pct}%"></i></div>
+      <div class="sub" style="margin:0">${emp} empresas · ${tot - emp} público · <b>${libre} libres</b></div>
+      <div class="breakdown">${Object.entries(by).map(([k, v]) => `<span class="pill ${k === 'Hipocalórico' ? 'accent' : 'neutral'}">${esc(k)} ${v}</span>`).join('') || '<span class="sub" style="margin:0">Sin pedidos</span>'}</div>
+    </div>`;
+  }).join('') || '<div class="panel empty">No hay platos en el menú.</div>';
+
+  const fl = [['todos', 'Todos'], ['empresa', 'Empresas'], ['publico', 'Público'], ['pendiente', 'Pendientes']];
+  $('filters').innerHTML = fl.map(([k, t]) => `<button type="button" class="chip" data-f="${k}" aria-pressed="${filtro === k}">${t}</button>`).join('');
+  $('filters').querySelectorAll('[data-f]').forEach(b => b.onclick = () => { filtro = b.dataset.f; renderCocina(); });
+
+  const list = P.pedidos.filter(o => filtro === 'todos' || o.tipo === filtro || o.estado === filtro).slice().sort((a, b) => b.n - a.n);
+  $('orders').innerHTML = list.length ? list.map(o => {
+    const S = ESTADOS[o.estado] || ESTADOS.pendiente;
+    return `<article class="order ${esc(o.estado)}">
+      <div class="num">#${o.n}<small>${esc(o.hora)}</small></div>
+      <div style="min-width:0"><div class="who">${esc(o.tipo === 'empresa' ? o.empresa : o.cliente)}</div>
+        <div class="sub" style="margin:0">${o.tipo === 'empresa' ? esc(o.cliente) + ' · Empresa' : 'Público general · paga al retirar'}</div>
+        <ul>${o.items.map(i => `<li>${i.cant} × ${esc(i.fondo)}${i.hipo ? ' — Hipocalórico' : i.agregado ? ' — ' + esc(i.agregado) : ''}${i.para ? ' <span class="sub">(' + esc(i.para) + ')</span>' : ''}</li>`).join('')}</ul></div>
+      <div class="side"><span class="pill ${S.c}">${S.t}</span><b>${clp(o.total)}</b>
+        <button type="button" class="btn" data-o="${esc(o.id)}" data-e="${S.next}">${S.btn}</button>
+        ${o.estado === 'pendiente' ? `<button type="button" class="btn ghost mini" data-o="${esc(o.id)}" data-e="anulado">Anular</button>` : ''}</div>
+    </article>`;
+  }).join('') : '<div class="panel empty">No hay pedidos con este filtro.</div>';
+  $('orders').querySelectorAll('[data-o]').forEach(b => b.onclick = () => {
+    const o = P.pedidos.find(x => x.id === b.dataset.o); const antes = o.estado;
+    o.estado = b.dataset.e; renderCocina();
+    staff('estado', { id: o.id, estado: o.estado }).then(r => { if (!r.ok) throw new Error(r.error); })
+      .catch(e => { o.estado = antes; renderCocina(); toast('No se guardó: ' + e.message); });
+  });
+
+  const pub = ped.filter(o => o.tipo === 'publico'), emp = ped.filter(o => o.tipo === 'empresa');
+  const cobrado = pub.filter(o => o.estado === 'entregado'), porCobrar = pub.filter(o => o.estado !== 'entregado');
+  $('caja').innerHTML = `
+    <tr><th>Concepto</th><th class="n">Colaciones</th><th class="n">Monto</th></tr>
+    <tr><td>Público · cobrado</td><td class="n">${cnt(cobrado)}</td><td class="n">${clp(sum(cobrado))}</td></tr>
+    <tr><td>Público · por cobrar</td><td class="n">${cnt(porCobrar)}</td><td class="n">${clp(sum(porCobrar))}</td></tr>
+    <tr><td>Empresas · a cuenta</td><td class="n">${cnt(emp)}</td><td class="n">${clp(sum(emp))}</td></tr>
+    <tr><th>Total del día</th><th class="n">${cnt(ped)}</th><th class="n">${clp(sum(ped))}</th></tr>`;
+  $('pendCount').textContent = P.pedidos.filter(o => o.estado === 'pendiente').length;
+}
+function cargarCuentas() {
+  staff('cuentas', { mes: $('mesCuentas').value }).then(r => {
+    $('cuentas').innerHTML = '<tr><th>Empresa</th><th class="n">Colaciones</th><th class="n">Monto</th></tr>' +
+      (r.cuentas.length ? r.cuentas.map(c => `<tr><td>${esc(c.empresa)}<div class="sub" style="margin:0">${c.dias} días</div></td><td class="n">${c.colaciones}</td><td class="n">${clp(c.total)}</td></tr>`).join('') +
+        `<tr><th>Total</th><th class="n">${r.cuentas.reduce((s, c) => s + c.colaciones, 0)}</th><th class="n">${clp(r.cuentas.reduce((s, c) => s + c.total, 0))}</th></tr>`
+        : '<tr><td colspan="3" class="sub">Sin pedidos de empresa este mes.</td></tr>');
+  }).catch(e => toast(e.message));
+}
+$('fechaPanel').onchange = cargarPanel;
+$('mesCuentas').onchange = cargarCuentas;
+
+/* ═════════════ MENÚ DEL DÍA ═════════════ */
+let E = null, dirty = false;   // copia editable
+function editarDesde(p) {
+  E = { fondos: p.fondos.map(f => Object.assign({}, f)), agregados: p.agregados.slice(), empresas: p.empresas.map(e => Object.assign({}, e)), cfg: Object.assign({}, p.cfg) };
+  setDirty(false); renderMenu();
+}
+function setDirty(v) { dirty = v; $('dirty').hidden = !v; }
+function renderMenu() {
+  if (!E) return;
+  $('fondosEdit').innerHTML = E.fondos.map((f, k) => `<div class="fondo-edit">
+    <input class="input" id="fn-${k}" data-k="${k}" data-f="nombre" value="${esc(f.nombre)}" aria-label="Nombre del plato">
+    <input class="input" id="fc-${k}" data-k="${k}" data-f="cupo" type="number" min="0" value="${f.cupo}" aria-label="Cupo de porciones">
+    <span style="display:grid;gap:2px">
+      <label class="chk"><input type="checkbox" data-k="${k}" data-f="agregado" ${f.agregado ? 'checked' : ''}> Lleva agregado</label>
+      <label class="chk"><input type="checkbox" data-k="${k}" data-f="activo" ${f.activo ? 'checked' : ''}> En el menú</label>
+    </span>
+    <button type="button" class="x" data-del="${k}" aria-label="Eliminar ${esc(f.nombre)}">×</button>
+  </div>`).join('') + '<div class="sub" style="margin:8px 0 0">Nombre · porciones del día · opciones</div>';
+  $('fondosEdit').querySelectorAll('[data-f]').forEach(inp => inp.onchange = () => {
+    const f = E.fondos[+inp.dataset.k], k = inp.dataset.f;
+    f[k] = inp.type === 'checkbox' ? inp.checked : k === 'cupo' ? Math.max(0, parseInt(inp.value) || 0) : inp.value;
+    setDirty(true);
+  });
+  $('fondosEdit').querySelectorAll('[data-del]').forEach(b => b.onclick = () => { E.fondos.splice(+b.dataset.del, 1); setDirty(true); renderMenu(); });
+
+  $('agregadosEdit').innerHTML = E.agregados.map((a, k) => `<span class="tag">${esc(a)}<button type="button" class="x" data-ag="${k}" aria-label="Quitar ${esc(a)}">×</button></span>`).join('') || '<span class="sub">Sin agregados.</span>';
+  $('agregadosEdit').querySelectorAll('[data-ag]').forEach(b => b.onclick = () => { E.agregados.splice(+b.dataset.ag, 1); setDirty(true); renderMenu(); });
+
+  $('empresasEdit').innerHTML = E.empresas.length ? E.empresas.map((e, k) => `<div class="emp-edit">
+    <input class="input" data-k="${k}" data-e="nombre" value="${esc(e.nombre)}" aria-label="Nombre de la empresa">
+    <input class="input" data-k="${k}" data-e="codigo" value="${esc(e.codigo)}" aria-label="Código" placeholder="Se genera solo" style="text-transform:uppercase">
+    <button type="button" class="x" data-del="${k}" aria-label="Quitar ${esc(e.nombre)}">×</button>
+  </div>`).join('') + '<div class="sub" style="margin:8px 0 0">Nombre · código para reservar</div>' : '<span class="sub">Aún no hay empresas.</span>';
+  $('empresasEdit').querySelectorAll('[data-e]').forEach(inp => inp.onchange = () => { E.empresas[+inp.dataset.k][inp.dataset.e] = inp.value; setDirty(true); });
+  $('empresasEdit').querySelectorAll('[data-del]').forEach(b => b.onclick = () => { E.empresas.splice(+b.dataset.del, 1); setDirty(true); renderMenu(); });
+
+  $('cfgPrecio').value = E.cfg.precio; $('cfgHipo').value = E.cfg.hipo; $('cfgCierre').value = E.cfg.cierre; $('cfgPin').value = '';
+}
+[['cfgPrecio', 'precio', true], ['cfgHipo', 'hipo', true], ['cfgCierre', 'cierre', false]].forEach(([id, k, num]) =>
+  $(id).onchange = e => { E.cfg[k] = num ? Math.max(0, parseInt(e.target.value) || 0) : e.target.value; setDirty(true); });
+$('cfgPin').oninput = () => setDirty(true);
+function addFrom(inputId, fn) { const i = $(inputId), v = i.value.trim(); if (!v || !E) return; fn(v); i.value = ''; setDirty(true); renderMenu(); }
+$('addFondo').onclick = () => addFrom('nuevoFondo', v => E.fondos.push({ id: uid(), nombre: v, cupo: 20, agregado: true, activo: true }));
+$('addAgregado').onclick = () => addFrom('nuevoAgregado', v => E.agregados.push(v));
+$('addEmpresa').onclick = () => addFrom('nuevaEmpresa', v => E.empresas.push({ id: uid(), nombre: v, codigo: '', activa: true }));
+[['nuevoFondo', 'addFondo'], ['nuevoAgregado', 'addAgregado'], ['nuevaEmpresa', 'addEmpresa']].forEach(([i, b]) =>
+  $(i).onkeydown = e => { if (e.key === 'Enter') $(b).click(); });
+$('descartar').onclick = () => { if (P) editarDesde(P); };
+$('guardar').onclick = () => {
+  if (!E) return;
+  const pinNuevo = $('cfgPin').value.trim();
+  if (pinNuevo && pinNuevo.length < 4) { toast('El PIN debe tener al menos 4 dígitos.'); return; }
+  $('guardar').disabled = true;
+  staff('guardarMenu', { cfg: Object.assign({}, E.cfg, { pinNuevo }), fondos: E.fondos, agregados: E.agregados, empresas: E.empresas })
+    .then(r => {
+      if (!r.ok) throw new Error(r.error);
+      if (pinNuevo) setPin(pinNuevo);
+      P = r; editarDesde(P); renderCocina(); cargarMenu(); toast('Menú guardado');
+    })
+    .catch(e => toast('No se guardó: ' + e.message))
+    .finally(() => $('guardar').disabled = false);
+};
+
+/* ═════════════ NAVEGACIÓN ═════════════ */
+const VIEWS = ['pedir', 'cocina', 'menu', 'login'];
+function route() {
+  let v = location.hash.slice(1); if (!VIEWS.includes(v) || v === 'login') v = 'pedir';
+  const logged = !!getPin();
+  const show = (v === 'cocina' || v === 'menu') && !logged ? 'login' : v;
+  VIEWS.forEach(x => $('v-' + x).hidden = x !== show);
+  document.querySelectorAll('[data-staff]').forEach(a => a.hidden = !logged);
+  $('foot').hidden = logged;
+  document.querySelectorAll('nav.tabs a').forEach(a => a.dataset.view === v ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+  if (logged && (v === 'cocina' || v === 'menu') && !P) { cargarPanel().catch(e => toast(e.message)); cargarCuentas(); }
+  if (show === 'login') setTimeout(() => $('pin').focus(), 0);
+}
+window.addEventListener('hashchange', route);
+window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+// refresco automático: disponibilidad para clientes, pedidos para cocina
+setInterval(() => {
+  if (document.hidden) return;
+  const v = location.hash.slice(1);
+  if (getPin() && v === 'cocina') cargarPanel().catch(() => {});
+  else if (!D.enviando && (v === '' || v === 'pedir')) cargarMenu();
+}, 20000);
+
+const hoyISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+$('fechaPanel').value = hoyISO; $('mesCuentas').value = hoyISO.slice(0, 7);
+$('today').textContent = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Santiago' });
+route(); cargarMenu();
+</script>
+</body>
+</html>

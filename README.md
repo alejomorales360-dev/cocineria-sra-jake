@@ -1,0 +1,60 @@
+# Cocinería Sra. Jake · Pedidos
+
+App web para recibir pedidos de almuerzo del día:
+
+- **Clientes** (público general y empresas con convenio) ven el menú con la disponibilidad en vivo y hacen su pedido.
+- **Cocina y caja** ven cuántas porciones preparar de cada plato y agregado, avanzan los pedidos (pendiente → listo → entregado), ven la caja del día y la cuenta mensual de cada empresa.
+- **Menú del día**: platos, porciones disponibles, agregados, precios, hora de cierre de reservas de empresa, empresas y sus códigos.
+
+Funciona con **Google Apps Script** como backend y una **planilla de Google Sheets** como base de datos (se crea sola).
+
+## Reglas del negocio
+
+| Regla | Valor inicial | Dónde se cambia |
+|---|---|---|
+| Colación normal (fondo + agregado + sopa, ensalada, pan y jugo) | $5.000 | Menú del día |
+| Hipocalórico: sin agregado (arroz, tallarín o puré) | +$1.000 | Menú del día |
+| Cierre de reservas de empresa | 10:30 | Menú del día |
+| Porciones por plato | Pollo 40 · Cazuela 25 · Panitas 15 · Carne a la olla 30 | Menú del día |
+| PIN de cocina | `1234` | Menú del día → "PIN nuevo" (**cámbialo al instalar**) |
+
+- Los platos que no llevan agregado (la cazuela) no tienen opción hipocalórica.
+- El público general paga al retirar. Las empresas cargan a su cuenta y se les cobra a fin de mes.
+- Para reservar a nombre de una empresa se necesita su **código** (se genera al agregar la empresa; entrégaselo al encargado).
+- Después de la hora de cierre, las empresas pueden pedir como público general según lo que quede.
+- Un pedido anulado devuelve sus porciones al cupo del día.
+
+## Archivos
+
+- `index.html` — la app (cliente, cocina y menú). Se publica en GitHub Pages y también la sirve Apps Script.
+- `Codigo.gs` — backend: lee y escribe la planilla, valida cupos con bloqueo para no vender de más.
+- `appsscript.json` — manifest de Apps Script.
+- `.clasp.json.example` — plantilla para [`clasp`](https://github.com/google/clasp).
+
+## Puesta en marcha
+
+1. En <https://script.google.com> crea un proyecto nuevo y copia su **ID de script** (Configuración del proyecto).
+2. Sube el código:
+   ```bash
+   npm install -g @google/clasp
+   clasp login
+   cp .clasp.json.example .clasp.json   # pega el scriptId
+   clasp push
+   ```
+   (O copia `Codigo.gs` e `index.html` a mano en el editor de Apps Script.)
+3. En el editor ejecuta la función **`instalar`** una vez: crea la planilla "Cocinería Sra. Jake · Datos" en tu Drive y pide los permisos. El registro muestra el enlace a la planilla.
+4. **Implementar → Nueva implementación → Aplicación web** (Ejecutar como: *Yo*; Acceso: *Cualquier usuario*). Copia la URL `/exec`.
+5. Pega esa URL en `API_URL` al inicio del `<script>` de `index.html` y haz push a `main`; GitHub Pages publica la página sola.
+
+Puedes usar cualquiera de los dos enlaces:
+
+- URL `/exec` de Apps Script (funciona apenas implementas).
+- `https://<usuario>.github.io/cocineria-sra-jake/` (necesita `API_URL`).
+
+Para cocina: abre el enlace con `#cocina` al final y entra con el PIN.
+
+Si cambias `Codigo.gs`, vuelve a hacer `clasp push` y crea una **nueva versión** de la implementación.
+
+## Hojas de la planilla
+
+`CONFIG`, `MENU`, `AGREGADOS`, `EMPRESAS`, `PEDIDOS` (un registro por pedido) e `ITEMS` (un registro por plato pedido, útil para reportes). El detalle de columnas está al inicio de `Codigo.gs`.
