@@ -9,13 +9,15 @@
 //   recargo_hipo    | 1000
 //   cierre_empresas | 10:30
 //   pin_cocina      | 1234        ← cámbialo después de instalar
+//   negocio_nombre, negocio_rut, negocio_telefono, negocio_direccion, negocio_email
+//                                 (encabezado de cotizaciones, detalles y balances)
 //
 // MENU        A:ID  B:NOMBRE  C:CUPO  D:LLEVA_AGREGADO  E:ACTIVO  F:ORDEN
 //   (el menú de hoy; el cupo es de porciones por día)
 //
 // AGREGADOS   A:NOMBRE  B:ACTIVO
 //
-// EMPRESAS    A:ID  B:NOMBRE  C:CODIGO  D:ACTIVA
+// EMPRESAS    A:ID  B:NOMBRE  C:CODIGO  D:ACTIVA  E:EMAIL  F:CONTACTO  G:RUT
 //   (el código se lo das a la empresa para que entre a su portal y anote a su gente)
 //
 // PEDIDOS     A:ID  B:N  C:FECHA  D:HORA  E:TIPO  F:EMPRESA_ID  G:EMPRESA
@@ -25,17 +27,22 @@
 //             F:HIPOCALORICO  G:CANTIDAD  H:PARA  I:PRECIO_UNIT  J:SUBTOTAL  K:ITEM_ID
 //   (en las listas de empresa, PARA es el nombre del trabajador que se anotó)
 //
+// COTIZACIONES A:ID  B:N  C:FECHA  D:CLIENTE  E:RUT  F:CONTACTO  G:EMAIL  H:TELEFONO
+//             I:LINEAS_JSON  J:DESCUENTO_PCT  K:TOTAL  L:VALIDEZ_DIAS  M:NOTAS
+//             N:ESTADO  O:ENVIADA_EL
+//
 // ════════════════════════════════════════════════════════════════
 
 const TZ = 'America/Santiago';
-const SH = { CONFIG:'CONFIG', MENU:'MENU', AGREGADOS:'AGREGADOS', EMPRESAS:'EMPRESAS', PEDIDOS:'PEDIDOS', ITEMS:'ITEMS' };
+const SH = { CONFIG:'CONFIG', MENU:'MENU', AGREGADOS:'AGREGADOS', EMPRESAS:'EMPRESAS', PEDIDOS:'PEDIDOS', ITEMS:'ITEMS', COTIZACIONES:'COTIZACIONES' };
 const HEADERS = {
   CONFIG:    ['CLAVE','VALOR'],
   MENU:      ['ID','NOMBRE','CUPO','LLEVA_AGREGADO','ACTIVO','ORDEN'],
   AGREGADOS: ['NOMBRE','ACTIVO'],
-  EMPRESAS:  ['ID','NOMBRE','CODIGO','ACTIVA'],
+  EMPRESAS:  ['ID','NOMBRE','CODIGO','ACTIVA','EMAIL','CONTACTO','RUT'],
   PEDIDOS:   ['ID','N','FECHA','HORA','TIPO','EMPRESA_ID','EMPRESA','CLIENTE','ESTADO','TOTAL','PAGO','CREADO'],
-  ITEMS:     ['PEDIDO_ID','FECHA','FONDO_ID','FONDO','AGREGADO','HIPOCALORICO','CANTIDAD','PARA','PRECIO_UNIT','SUBTOTAL','ITEM_ID']
+  ITEMS:     ['PEDIDO_ID','FECHA','FONDO_ID','FONDO','AGREGADO','HIPOCALORICO','CANTIDAD','PARA','PRECIO_UNIT','SUBTOTAL','ITEM_ID'],
+  COTIZACIONES: ['ID','N','FECHA','CLIENTE','RUT','CONTACTO','EMAIL','TELEFONO','LINEAS_JSON','DESCUENTO_PCT','TOTAL','VALIDEZ_DIAS','NOTAS','ESTADO','ENVIADA_EL']
 };
 const ESTADOS = ['pendiente','listo','entregado','anulado'];
 
@@ -67,7 +74,9 @@ function doPost(e){
 // Llamado por fetch (GitHub Pages) y por google.script.run (cuando se abre desde Apps Script).
 function api(action, payload){
   const publicas = { menu: getMenu, pedir: crearPedido, empresaEntrar: empresaEntrar, empresaAnotar: empresaAnotar, empresaQuitar: empresaQuitar, empresaMes: empresaMes };
-  const cocina   = { panel: getPanel, estado: cambiarEstado, guardarMenu: guardarMenu, cuentas: getCuentas, login: function(){ return { ok:true }; } };
+  const cocina   = { panel: getPanel, estado: cambiarEstado, guardarMenu: guardarMenu, cuentas: getCuentas, login: function(){ return { ok:true }; },
+                     balance: getBalance, cotizaciones: listarCotizaciones, guardarCotizacion: guardarCotizacion,
+                     documento: getDocumento, pdf: getPdf, enviar: enviarDocumento };
   try {
     if (publicas[action]) return publicas[action](payload || {});
     if (cocina[action]) {
@@ -102,13 +111,17 @@ function sheet_(name){
     sh.getRange(1, 1, 1, HEADERS[name].length).setValues([HEADERS[name]]).setFontWeight('bold');
     sh.setFrozenRows(1);
     seed_(name, sh);
+  } else if (sh.getLastColumn() < HEADERS[name].length) {
+    // planilla creada con una versión anterior: agrega los encabezados nuevos
+    sh.getRange(1, 1, 1, HEADERS[name].length).setValues([HEADERS[name]]).setFontWeight('bold');
   }
   return sh;
 }
 
 function seed_(name, sh){
   const rows = {
-    CONFIG: [['precio_colacion',5000],['recargo_hipo',1000],['cierre_empresas','10:30'],['pin_cocina','1234']],
+    CONFIG: [['precio_colacion',5000],['recargo_hipo',1000],['cierre_empresas','10:30'],['pin_cocina','1234'],
+      ['negocio_nombre','Cocinería Sra. Jake'],['negocio_rut',''],['negocio_telefono',''],['negocio_direccion',''],['negocio_email','']],
     MENU: [
       ['pollo','Pollo asado',40,true,true,1],
       ['cazuela','Cazuela de cerdo',25,false,true,2],
@@ -134,7 +147,11 @@ function cfg_(){
     precio: Number(c.precio_colacion) || 5000,
     hipo: Number(c.recargo_hipo) || 0,
     cierre: hhmm_(c.cierre_empresas) || '10:30',
-    pin_cocina: String(c.pin_cocina || '1234')
+    pin_cocina: String(c.pin_cocina || '1234'),
+    negocio: {
+      nombre: String(c.negocio_nombre || 'Cocinería Sra. Jake'), rut: String(c.negocio_rut || ''),
+      telefono: String(c.negocio_telefono || ''), direccion: String(c.negocio_direccion || ''), email: String(c.negocio_email || '')
+    }
   };
 }
 
@@ -164,7 +181,9 @@ function fondos_(soloActivos){
 }
 function agregados_(){ return rows_(SH.AGREGADOS).filter(function(r){ return bool_(r[1]); }).map(function(r){ return String(r[0]); }); }
 function empresas_(){
-  return rows_(SH.EMPRESAS).map(function(r){ return { id:String(r[0]), nombre:String(r[1]), codigo:String(r[2]), activa:bool_(r[3]) }; });
+  return rows_(SH.EMPRESAS).map(function(r){
+    return { id:String(r[0]), nombre:String(r[1]), codigo:String(r[2]), activa:bool_(r[3]), email:String(r[4] || ''), contacto:String(r[5] || ''), rut:String(r[6] || '') };
+  });
 }
 
 // Porciones pedidas hoy por fondo (sin contar pedidos anulados).
@@ -396,7 +415,7 @@ function getPanel(p){
   const c = cfg_();
   return {
     ok: true, fecha: fecha, hora: ahora_(),
-    cfg: { precio:c.precio, hipo:c.hipo, cierre:c.cierre },
+    cfg: { precio:c.precio, hipo:c.hipo, cierre:c.cierre, negocio:c.negocio },
     fondos: fondos_(false), agregados: agregados_(), empresas: empresas_(),
     pedidos: pedidosDe_(fecha)
   };
@@ -419,13 +438,17 @@ function guardarMenu(p){
       if (p.cfg.hipo != null) setCfg_('recargo_hipo', Math.max(0, Math.round(Number(p.cfg.hipo) || 0)));
       if (hhmm_(p.cfg.cierre)) setCfg_('cierre_empresas', hhmm_(p.cfg.cierre));
       if (p.cfg.pinNuevo && String(p.cfg.pinNuevo).trim().length >= 4) setCfg_('pin_cocina', String(p.cfg.pinNuevo).trim());
+      if (p.cfg.negocio) ['nombre','rut','telefono','direccion','email'].forEach(function(k){
+        if (p.cfg.negocio[k] != null) setCfg_('negocio_' + k, String(p.cfg.negocio[k]).trim().slice(0, 120));
+      });
     }
     if (Array.isArray(p.fondos)) replace_(SH.MENU, p.fondos.map(function(f, i){
       return [f.id || uid_(), String(f.nombre || '').trim(), Math.max(0, Math.floor(Number(f.cupo) || 0)), !!f.agregado, f.activo !== false, i + 1];
     }).filter(function(r){ return r[1]; }));
     if (Array.isArray(p.agregados)) replace_(SH.AGREGADOS, p.agregados.map(function(a){ return [String(a).trim(), true]; }).filter(function(r){ return r[0]; }));
     if (Array.isArray(p.empresas)) replace_(SH.EMPRESAS, p.empresas.map(function(e){
-      return [e.id || uid_(), String(e.nombre || '').trim(), String(e.codigo || '').trim().toUpperCase() || codigo_(), e.activa !== false];
+      return [e.id || uid_(), String(e.nombre || '').trim(), String(e.codigo || '').trim().toUpperCase() || codigo_(), e.activa !== false,
+        String(e.email || '').trim(), String(e.contacto || '').trim(), String(e.rut || '').trim()];
     }).filter(function(r){ return r[1]; }));
     return getPanel({});
   } finally {
@@ -468,6 +491,263 @@ function getCuentas(p){
   return { ok:true, mes:mes, cuentas: Object.keys(por).map(function(k){
     return { empresaId:k, empresa:por[k].empresa, dias:Object.keys(por[k].dias).length, colaciones:colaciones[k] || 0, total:por[k].total };
   }).sort(function(a, b){ return b.total - a.total; }) };
+}
+
+// ─── Balances, detalles y cotizaciones (requieren PIN) ──────────
+
+function rango_(p){
+  const re = /^\d{4}-\d{2}-\d{2}$/;
+  const hasta = re.test(p.hasta || '') ? p.hasta : hoy_();
+  const desde = re.test(p.desde || '') ? p.desde : hasta.slice(0, 8) + '01';
+  if (desde > hasta) throw new Error('La fecha "desde" es posterior a "hasta".');
+  return { desde:desde, hasta:hasta };
+}
+
+// Pedidos no anulados entre dos fechas, con sus platos.
+function pedidosRango_(desde, hasta, empresaId){
+  const peds = {}, lista = [];
+  rows_(SH.PEDIDOS).forEach(function(r){
+    const f = fecha_(r[2]);
+    if (f < desde || f > hasta || String(r[8]) === 'anulado') return;
+    if (empresaId && String(r[5]) !== empresaId) return;
+    const o = { id:String(r[0]), n:Number(r[1]), fecha:f, tipo:String(r[4]), empresaId:String(r[5]), empresa:String(r[6]), cliente:String(r[7]), estado:String(r[8]), total:Number(r[9]) || 0, items:[] };
+    peds[o.id] = o; lista.push(o);
+  });
+  rows_(SH.ITEMS).forEach(function(r){
+    const o = peds[r[0]]; if (!o) return;
+    o.items.push({ fondo:String(r[3]), agregado:String(r[4] || ''), hipo:bool_(r[5]), cant:Number(r[6]) || 0, para:String(r[7] || ''), precio:Number(r[8]) || 0, subtotal:Number(r[9]) || 0 });
+  });
+  return lista.sort(function(a, b){ return a.fecha < b.fecha ? -1 : a.fecha > b.fecha ? 1 : a.n - b.n; });
+}
+
+function balance_(desde, hasta){
+  const peds = pedidosRango_(desde, hasta);
+  const acc = function(){ return { pedidos:0, colaciones:0, total:0 }; };
+  const R = { total:acc(), publico:acc(), cobrado:acc(), porCobrar:acc(), empresas:acc(), hipo:0 };
+  const dias = {}, platos = {}, ags = {}, emps = {};
+  peds.forEach(function(o){
+    const n = o.items.reduce(function(s, i){ return s + i.cant; }, 0);
+    const add = function(a){ a.pedidos++; a.colaciones += n; a.total += o.total; };
+    add(R.total);
+    if (o.tipo === 'empresa') {
+      add(R.empresas);
+      const e = emps[o.empresaId] = emps[o.empresaId] || { empresaId:o.empresaId, empresa:o.empresa, dias:{}, colaciones:0, total:0 };
+      e.dias[o.fecha] = true; e.colaciones += n; e.total += o.total;
+    } else {
+      add(R.publico); add(o.estado === 'entregado' ? R.cobrado : R.porCobrar);
+    }
+    const d = dias[o.fecha] = dias[o.fecha] || { fecha:o.fecha, publico:0, empresas:0, colaciones:0, total:0 };
+    d[o.tipo === 'empresa' ? 'empresas' : 'publico'] += n; d.colaciones += n; d.total += o.total;
+    o.items.forEach(function(i){
+      const pl = platos[i.fondo] = platos[i.fondo] || { fondo:i.fondo, colaciones:0, hipo:0, total:0 };
+      pl.colaciones += i.cant; pl.total += i.subtotal; if (i.hipo) { pl.hipo += i.cant; R.hipo += i.cant; }
+      const k = i.hipo ? 'Hipocalórico' : (i.agregado || 'Sin agregado');
+      ags[k] = (ags[k] || 0) + i.cant;
+    });
+  });
+  const vals = function(o){ return Object.keys(o).map(function(k){ return o[k]; }); };
+  return {
+    desde:desde, hasta:hasta, resumen:R,
+    porDia: vals(dias).sort(function(a, b){ return a.fecha < b.fecha ? -1 : 1; }),
+    porPlato: vals(platos).sort(function(a, b){ return b.colaciones - a.colaciones; }),
+    porAgregado: Object.keys(ags).map(function(k){ return { agregado:k, colaciones:ags[k] }; }).sort(function(a, b){ return b.colaciones - a.colaciones; }),
+    porEmpresa: vals(emps).map(function(e){ return { empresaId:e.empresaId, empresa:e.empresa, dias:Object.keys(e.dias).length, colaciones:e.colaciones, total:e.total }; })
+      .sort(function(a, b){ return b.total - a.total; })
+  };
+}
+
+// payload: { desde, hasta }
+function getBalance(p){
+  const r = rango_(p);
+  return Object.assign({ ok:true }, balance_(r.desde, r.hasta));
+}
+
+function cotizaciones_(){
+  return rows_(SH.COTIZACIONES).map(function(r){
+    let lineas = []; try { lineas = JSON.parse(r[8] || '[]'); } catch (e) {}
+    return { id:String(r[0]), n:Number(r[1]), fecha:fecha_(r[2]), cliente:String(r[3]), rut:String(r[4] || ''), contacto:String(r[5] || ''), email:String(r[6] || ''),
+      telefono:String(r[7] || ''), lineas:lineas, descuento:Number(r[9]) || 0, total:Number(r[10]) || 0, validez:Number(r[11]) || 0, notas:String(r[12] || ''),
+      estado:String(r[13] || 'borrador'), enviadaEl:r[14] ? String(r[14]) : '' };
+  });
+}
+
+function listarCotizaciones(){
+  return { ok:true, cotizaciones: cotizaciones_().sort(function(a, b){ return b.n - a.n; }).slice(0, 100) };
+}
+
+function totalCotizacion_(lineas, descuento){
+  const sub = lineas.reduce(function(s, l){ return s + l.cantidad * l.precio; }, 0);
+  const desc = Math.round(sub * descuento / 100);
+  return { subtotal:sub, descuento:desc, total:sub - desc };
+}
+
+// payload: { id?, cliente, rut, contacto, email, telefono, lineas:[{descripcion,cantidad,precio}], descuento, validez, notas }
+function guardarCotizacion(p){
+  const cliente = String(p.cliente || '').trim().slice(0, 100);
+  if (!cliente) return { ok:false, error:'Falta el nombre del cliente.' };
+  const lineas = (Array.isArray(p.lineas) ? p.lineas : []).map(function(l){
+    return { descripcion:String(l.descripcion || '').trim().slice(0, 160), cantidad:Math.max(0, Number(l.cantidad) || 0), precio:Math.max(0, Math.round(Number(l.precio) || 0)) };
+  }).filter(function(l){ return l.descripcion && l.cantidad > 0; });
+  if (!lineas.length) return { ok:false, error:'Agrega al menos una línea con descripción y cantidad.' };
+  const descuento = Math.min(100, Math.max(0, Number(p.descuento) || 0));
+  const validez = Math.max(1, Math.floor(Number(p.validez) || 15));
+  const total = totalCotizacion_(lineas, descuento).total;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const sh = sheet_(SH.COTIZACIONES), v = sh.getDataRange().getValues();
+    const fila = function(id, n, fecha, estado, enviada){
+      return [id, n, fecha, cliente, String(p.rut || '').trim(), String(p.contacto || '').trim(), String(p.email || '').trim(), String(p.telefono || '').trim(),
+        JSON.stringify(lineas), descuento, total, validez, String(p.notas || '').trim().slice(0, 1000), estado, enviada];
+    };
+    for (let i = 1; i < v.length; i++) if (p.id && String(v[i][0]) === String(p.id)) {
+      sh.getRange(i + 1, 1, 1, HEADERS.COTIZACIONES.length).setValues([fila(v[i][0], v[i][1], hoy_(), v[i][13] || 'borrador', v[i][14] || '')]);
+      return { ok:true, cotizacion: cotizaciones_().filter(function(c){ return c.id === String(p.id); })[0] };
+    }
+    const n = v.slice(1).reduce(function(m, r){ return Math.max(m, Number(r[1]) || 0); }, 0) + 1;
+    const id = uid_();
+    sh.appendRow(fila(id, n, hoy_(), 'borrador', ''));
+    return { ok:true, cotizacion: cotizaciones_().filter(function(c){ return c.id === id; })[0] };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ── Documentos: el mismo HTML sirve para vista previa, PDF y correo ──
+
+function clp_(n){ return '$' + String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+function ddmm_(iso){ const p = String(iso).split('-'); return p.length === 3 ? p[2] + '-' + p[1] + '-' + p[0] : String(iso); }
+function h_(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]; }); }
+function sumarDias_(iso, n){ const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return Utilities.formatDate(d, TZ, 'yyyy-MM-dd'); }
+
+function docShell_(neg, titulo, meta, cuerpo){
+  const datos = [neg.rut && 'RUT ' + h_(neg.rut), h_(neg.direccion), h_(neg.telefono), h_(neg.email)].filter(String).join(' · ');
+  return '<div style="font-family:Arial,Helvetica,sans-serif;color:#1f1c19;max-width:720px;margin:0 auto;font-size:13px;line-height:1.45">' +
+    '<table style="width:100%;border-collapse:collapse;background:#24211d;color:#f4efe6"><tr>' +
+    '<td style="padding:16px 18px"><div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;opacity:.75">Cocinería</div>' +
+    '<div style="font-size:24px;font-weight:bold;color:#e9a416">' + h_(neg.nombre) + '</div>' +
+    (datos ? '<div style="font-size:11px;opacity:.8;margin-top:2px">' + datos + '</div>' : '') + '</td>' +
+    '<td style="padding:16px 18px;text-align:right;vertical-align:top"><div style="font-size:18px;font-weight:bold">' + h_(titulo) + '</div>' +
+    meta.map(function(m){ return '<div style="font-size:12px;opacity:.85">' + m + '</div>'; }).join('') + '</td></tr></table>' +
+    '<div style="padding:16px 4px">' + cuerpo + '</div></div>';
+}
+const TD_ = 'padding:6px 8px;border-bottom:1px solid #e5e1d8;';
+const TH_ = 'padding:6px 8px;border-bottom:2px solid #1f1c19;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#6a645c;';
+function tabla_(cols, filas, pie){
+  const al = function(c){ return c.n ? 'text-align:right;' : ''; };
+  return '<table style="width:100%;border-collapse:collapse;margin:8px 0 18px">' +
+    '<tr>' + cols.map(function(c){ return '<th style="' + TH_ + al(c) + '">' + h_(c.t) + '</th>'; }).join('') + '</tr>' +
+    filas.map(function(f){ return '<tr>' + f.map(function(v, i){ return '<td style="' + TD_ + al(cols[i]) + '">' + v + '</td>'; }).join('') + '</tr>'; }).join('') +
+    (pie ? '<tr>' + pie.map(function(v, i){ return '<td style="padding:8px;font-weight:bold;' + al(cols[i]) + '">' + v + '</td>'; }).join('') + '</tr>' : '') +
+    '</table>';
+}
+function h2_(t){ return '<h2 style="font-size:15px;margin:18px 0 4px">' + h_(t) + '</h2>'; }
+
+// payload: { tipo:'balance'|'detalle'|'cotizacion', desde, hasta, empresaId, id }
+function documento_(p){
+  const c = cfg_(), neg = c.negocio, hoy = hoy_();
+  if (p.tipo === 'balance') {
+    const r = rango_(p), b = balance_(r.desde, r.hasta), R = b.resumen;
+    const cuerpo =
+      tabla_([{ t:'Concepto' }, { t:'Pedidos', n:1 }, { t:'Colaciones', n:1 }, { t:'Monto', n:1 }], [
+        ['Público general · cobrado', R.cobrado.pedidos, R.cobrado.colaciones, clp_(R.cobrado.total)],
+        ['Público general · por cobrar', R.porCobrar.pedidos, R.porCobrar.colaciones, clp_(R.porCobrar.total)],
+        ['Empresas · a cuenta', R.empresas.pedidos, R.empresas.colaciones, clp_(R.empresas.total)]
+      ], ['Total del período', R.total.pedidos, R.total.colaciones, clp_(R.total.total)]) +
+      h2_('Por empresa') + (b.porEmpresa.length ? tabla_([{ t:'Empresa' }, { t:'Días', n:1 }, { t:'Colaciones', n:1 }, { t:'Monto', n:1 }],
+        b.porEmpresa.map(function(e){ return [h_(e.empresa), e.dias, e.colaciones, clp_(e.total)]; })) : '<p>Sin consumo de empresas.</p>') +
+      h2_('Por plato') + tabla_([{ t:'Plato' }, { t:'Colaciones', n:1 }, { t:'Hipocalóricas', n:1 }, { t:'Monto', n:1 }],
+        b.porPlato.map(function(x){ return [h_(x.fondo), x.colaciones, x.hipo, clp_(x.total)]; })) +
+      h2_('Por día') + tabla_([{ t:'Fecha' }, { t:'Público', n:1 }, { t:'Empresas', n:1 }, { t:'Monto', n:1 }],
+        b.porDia.map(function(d){ return [ddmm_(d.fecha), d.publico, d.empresas, clp_(d.total)]; }));
+    const per = ddmm_(r.desde) + ' al ' + ddmm_(r.hasta);
+    return { titulo:'Balance', asunto:'Balance ' + per + ' · ' + neg.nombre, archivo:'Balance ' + r.desde + ' a ' + r.hasta,
+      html: docShell_(neg, 'Balance', ['Período: ' + per, 'Emitido: ' + ddmm_(hoy)], cuerpo),
+      texto: neg.nombre + ' — Balance ' + per + ': ' + R.total.colaciones + ' colaciones, total ' + clp_(R.total.total) +
+        ' (público ' + clp_(R.publico.total) + ', empresas ' + clp_(R.empresas.total) + ').', para:'', telefono:'' };
+  }
+  if (p.tipo === 'detalle') {
+    const r = rango_(p);
+    const e = empresas_().filter(function(x){ return x.id === p.empresaId; })[0];
+    if (!e) throw new Error('Empresa no encontrada.');
+    const peds = pedidosRango_(r.desde, r.hasta, e.id).filter(function(o){ return o.tipo === 'empresa'; });
+    let n = 0, total = 0;
+    const filas = [];
+    peds.forEach(function(o){
+      o.items.forEach(function(i){
+        n += i.cant; total += i.subtotal;
+        filas.push([ddmm_(o.fecha), h_(i.para || '—'), h_(i.fondo) + (i.hipo ? ' · Hipocalórico' : i.agregado ? ' · ' + h_(i.agregado) : ''), i.cant, clp_(i.subtotal)]);
+      });
+    });
+    const dias = {}; peds.forEach(function(o){ dias[o.fecha] = (dias[o.fecha] || 0) + o.total; });
+    const per = ddmm_(r.desde) + ' al ' + ddmm_(r.hasta);
+    const cuerpo =
+      '<table style="width:100%;margin-bottom:12px"><tr><td style="vertical-align:top"><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#6a645c">Cliente</div>' +
+      '<div style="font-size:16px;font-weight:bold">' + h_(e.nombre) + '</div>' + (e.rut ? '<div>RUT ' + h_(e.rut) + '</div>' : '') + (e.contacto ? '<div>' + h_(e.contacto) + '</div>' : '') + '</td>' +
+      '<td style="text-align:right;vertical-align:top"><div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#6a645c">Total del período</div>' +
+      '<div style="font-size:24px;font-weight:bold">' + clp_(total) + '</div><div>' + n + ' colaciones · ' + Object.keys(dias).length + ' días</div></td></tr></table>' +
+      h2_('Resumen por día') + tabla_([{ t:'Fecha' }, { t:'Monto', n:1 }], Object.keys(dias).sort().map(function(d){ return [ddmm_(d), clp_(dias[d])]; }), ['Total', clp_(total)]) +
+      h2_('Detalle de colaciones') + (filas.length ? tabla_([{ t:'Fecha' }, { t:'Persona' }, { t:'Plato' }, { t:'Cant.', n:1 }, { t:'Monto', n:1 }], filas, ['', '', 'Total', n, clp_(total)]) : '<p>Sin consumo en el período.</p>') +
+      '<p style="color:#6a645c;font-size:12px">Cada colación incluye sopa, ensalada, pan y vaso de jugo.</p>';
+    return { titulo:'Detalle de consumo', asunto:'Detalle de consumo ' + per + ' · ' + e.nombre, archivo:'Detalle ' + e.nombre + ' ' + r.desde + ' a ' + r.hasta,
+      html: docShell_(neg, 'Detalle de consumo', ['Período: ' + per, 'Emitido: ' + ddmm_(hoy)], cuerpo),
+      texto: 'Hola, le enviamos el detalle de consumo de ' + e.nombre + ' del ' + per + ': ' + n + ' colaciones, total ' + clp_(total) + '. ' + neg.nombre + '.',
+      para:e.email, telefono:'' };
+  }
+  if (p.tipo === 'cotizacion') {
+    const q = cotizaciones_().filter(function(x){ return x.id === String(p.id); })[0];
+    if (!q) throw new Error('Cotización no encontrada.');
+    const t = totalCotizacion_(q.lineas, q.descuento);
+    const filas = q.lineas.map(function(l){ return [h_(l.descripcion), l.cantidad, clp_(l.precio), clp_(l.cantidad * l.precio)]; });
+    const totales = '<table style="margin-left:auto;border-collapse:collapse;min-width:260px">' +
+      '<tr><td style="padding:4px 8px">Subtotal</td><td style="padding:4px 8px;text-align:right">' + clp_(t.subtotal) + '</td></tr>' +
+      (q.descuento ? '<tr><td style="padding:4px 8px">Descuento ' + q.descuento + '%</td><td style="padding:4px 8px;text-align:right">−' + clp_(t.descuento) + '</td></tr>' : '') +
+      '<tr><td style="padding:8px;font-weight:bold;font-size:16px;border-top:2px solid #1f1c19">Total</td><td style="padding:8px;text-align:right;font-weight:bold;font-size:16px;border-top:2px solid #1f1c19">' + clp_(t.total) + '</td></tr></table>';
+    const cuerpo =
+      '<div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#6a645c">Para</div>' +
+      '<div style="font-size:16px;font-weight:bold">' + h_(q.cliente) + '</div>' +
+      [q.rut && 'RUT ' + h_(q.rut), h_(q.contacto), h_(q.email), h_(q.telefono)].filter(String).map(function(x){ return '<div>' + x + '</div>'; }).join('') +
+      tabla_([{ t:'Descripción' }, { t:'Cantidad', n:1 }, { t:'Precio unitario', n:1 }, { t:'Total', n:1 }], filas) + totales +
+      (q.notas ? h2_('Condiciones') + '<p style="white-space:pre-wrap">' + h_(q.notas) + '</p>' : '') +
+      '<p style="color:#6a645c;font-size:12px;margin-top:18px">Cada colación incluye plato de fondo con agregado, sopa, ensalada, pan y vaso de jugo. ' +
+      'Cotización válida hasta el ' + ddmm_(sumarDias_(q.fecha, q.validez)) + '.</p>';
+    return { titulo:'Cotización N° ' + q.n, asunto:'Cotización N° ' + q.n + ' · ' + neg.nombre, archivo:'Cotizacion ' + q.n + ' ' + q.cliente,
+      html: docShell_(neg, 'Cotización', ['N° ' + q.n, 'Fecha: ' + ddmm_(q.fecha), 'Válida hasta: ' + ddmm_(sumarDias_(q.fecha, q.validez))], cuerpo),
+      texto: 'Hola ' + q.cliente + ', le enviamos la cotización N° ' + q.n + ' de ' + neg.nombre + ': ' +
+        q.lineas.map(function(l){ return l.cantidad + ' × ' + l.descripcion + ' (' + clp_(l.precio) + ')'; }).join('; ') +
+        '. Total ' + clp_(t.total) + (q.descuento ? ' con ' + q.descuento + '% de descuento' : '') + '. Válida hasta el ' + ddmm_(sumarDias_(q.fecha, q.validez)) + '.',
+      para:q.email, telefono:q.telefono };
+  }
+  throw new Error('Tipo de documento desconocido.');
+}
+
+function getDocumento(p){ return Object.assign({ ok:true }, documento_(p)); }
+
+function pdfBlob_(d){
+  const page = '<html><head><meta charset="utf-8"></head><body style="margin:24px">' + d.html + '</body></html>';
+  return Utilities.newBlob(page, 'text/html', 'doc.html').getAs('application/pdf').setName(d.archivo.replace(/[\\/:*?"<>|]/g, '') + '.pdf');
+}
+
+function getPdf(p){
+  const d = documento_(p), b = pdfBlob_(d);
+  return { ok:true, nombre:b.getName(), base64:Utilities.base64Encode(b.getBytes()) };
+}
+
+// payload: { ...documento, para, mensaje }
+function enviarDocumento(p){
+  const para = String(p.para || '').trim();
+  if (!/^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$/.test(para)) return { ok:false, error:'Escribe un correo válido.' };
+  const d = documento_(p), neg = cfg_().negocio;
+  const msg = String(p.mensaje || '').trim();
+  const intro = msg ? '<p style="font-family:Arial,Helvetica,sans-serif;font-size:14px;white-space:pre-wrap">' + h_(msg) + '</p>' : '';
+  const opts = { to:para, subject:d.asunto, htmlBody: intro + d.html, name:neg.nombre, attachments:[pdfBlob_(d)] };
+  if (neg.email) opts.replyTo = neg.email;
+  MailApp.sendEmail(opts);
+  if (p.tipo === 'cotizacion') {
+    const sh = sheet_(SH.COTIZACIONES), v = sh.getDataRange().getValues();
+    for (let i = 1; i < v.length; i++) if (String(v[i][0]) === String(p.id)) { sh.getRange(i + 1, 14, 1, 2).setValues([['enviada', new Date()]]); break; }
+  }
+  return { ok:true, enviadoA:para };
 }
 
 // Ejecuta esto una vez desde el editor para crear las hojas y autorizar permisos.

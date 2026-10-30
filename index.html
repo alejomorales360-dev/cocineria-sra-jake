@@ -183,6 +183,30 @@ body{margin:0}
 .dirty{font-size:13px;color:var(--warn);font-weight:700}
 .savebar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:flex-end;margin-top:18px}
 .mini{font-size:12px;padding:5px 10px}
+.emp-edit{grid-template-columns:minmax(0,1fr) 110px auto;padding:10px 0}
+.emp-edit .more{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin:18px 0}
+.kpi{display:grid;gap:4px}
+.kpi .big{font-size:26px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+.tablewrap{overflow-x:auto}
+td .meter{min-width:60px}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.qlines{width:100%;border-collapse:collapse}
+.qlines td{padding:4px;border-bottom:1px solid var(--line);vertical-align:middle}
+.qlines input{padding:7px 8px}
+.qlines .cant{width:80px}.qlines .precio{width:100px}
+.qtot{display:grid;gap:4px;justify-items:end;font-size:14px}
+.qtot b{font-size:20px}
+textarea.input{resize:vertical;min-height:70px;font:inherit}
+dialog#docDlg{border:0;border-radius:var(--r);padding:0;width:min(920px,calc(100% - 24px));max-height:calc(100% - 24px);background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog#docDlg::backdrop{background:rgba(20,18,16,.55)}
+.dlg{display:grid;grid-template-columns:minmax(0,1fr) 300px;min-height:0}
+.dlg iframe{width:100%;height:min(78vh,900px);border:0;background:#fff;border-radius:var(--r) 0 0 var(--r)}
+.dlg aside{padding:18px;display:grid;gap:14px;align-content:start;border-left:1px solid var(--line);overflow:auto;max-height:min(78vh,900px)}
+@media (max-width:900px){.two{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){.dlg{grid-template-columns:minmax(0,1fr)}.dlg iframe{height:50vh;border-radius:var(--r) var(--r) 0 0}.dlg aside{border-left:0;border-top:1px solid var(--line);max-height:none}}
+@media (max-width:520px){.emp-edit .more{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
@@ -198,6 +222,8 @@ body{margin:0}
       <a href="#empresa" data-view="empresa">Empresas</a>
       <a href="#cocina" data-view="cocina" data-staff hidden>Cocina y caja <span class="count" id="pendCount">0</span></a>
       <a href="#menu" data-view="menu" data-staff hidden>Menú del día</a>
+      <a href="#balances" data-view="balances" data-staff hidden>Balances</a>
+      <a href="#documentos" data-view="documentos" data-staff hidden>Cotizaciones y detalles</a>
     </nav>
   </div>
 </header>
@@ -287,6 +313,80 @@ body{margin:0}
       </div>
     </section>
 
+    <!-- BALANCES -->
+    <section id="v-balances" hidden>
+      <h2>Balance</h2>
+      <p class="sub">Ventas y colaciones entre dos fechas. Los pedidos anulados no se cuentan.</p>
+      <div class="panel stack" style="gap:12px">
+        <div class="chips" id="balPresets"></div>
+        <div class="row">
+          <label class="field"><span>Desde</span><input class="input" type="date" id="balDesde"></label>
+          <label class="field"><span>Hasta</span><input class="input" type="date" id="balHasta"></label>
+          <button class="btn primary" id="balVer" type="button">Ver balance</button>
+        </div>
+      </div>
+      <div id="balOut"><div class="loading">Elige un período.</div></div>
+    </section>
+
+    <!-- COTIZACIONES Y DETALLES -->
+    <section id="v-documentos" hidden>
+      <div class="two">
+        <div class="stack">
+          <div class="panel stack">
+            <div><h2>Detalle de consumo para una empresa</h2><p class="sub" style="margin:0">Lista de colaciones por día y persona, con el total a pagar. Se puede descargar en PDF o enviar por correo.</p></div>
+            <label class="field"><span>Empresa</span><select class="input" id="detEmpresa"></select></label>
+            <div class="chips" id="detPresets"></div>
+            <div class="row">
+              <label class="field"><span>Desde</span><input class="input" type="date" id="detDesde"></label>
+              <label class="field"><span>Hasta</span><input class="input" type="date" id="detHasta"></label>
+              <button class="btn primary" id="detVer" type="button">Ver detalle</button>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="toolbar" style="margin-bottom:6px"><h2 style="margin:0">Cotizaciones</h2><button class="btn mini" id="qNueva" type="button">Nueva cotización</button></div>
+            <div class="tablewrap"><table id="qLista"></table></div>
+          </div>
+        </div>
+
+        <div class="panel stack" id="qForm">
+          <div><h2 id="qTitulo">Nueva cotización</h2><p class="sub" style="margin:0">Para empresas o clientes que quieran contratar el servicio.</p></div>
+          <div class="grid2">
+            <label class="field"><span>Cliente</span><input class="input" id="qCliente" data-q="cliente" placeholder="Nombre o razón social"></label>
+            <label class="field"><span>RUT (opcional)</span><input class="input" id="qRut" data-q="rut"></label>
+            <label class="field"><span>Contacto</span><input class="input" id="qContacto" data-q="contacto" placeholder="Nombre de la persona"></label>
+            <label class="field"><span>Teléfono</span><input class="input" id="qTelefono" data-q="telefono" placeholder="+56 9 ..."></label>
+          </div>
+          <label class="field"><span>Email</span><input class="input" id="qEmail" data-q="email" type="email"></label>
+          <div>
+            <div class="label" style="margin-bottom:6px">Detalle</div>
+            <div class="tablewrap"><table class="qlines" id="qLineas"></table></div>
+            <div class="row" style="margin-top:8px">
+              <button class="btn mini" type="button" id="qAddNormal">+ Colación normal</button>
+              <button class="btn mini" type="button" id="qAddHipo">+ Colación hipocalórica</button>
+              <button class="btn mini ghost" type="button" id="qAddLinea">+ Otra línea</button>
+            </div>
+          </div>
+          <div class="panel" style="background:var(--bg)">
+            <div class="label" style="margin-bottom:6px">Calcular plan mensual</div>
+            <div class="row">
+              <label class="field"><span>Personas por día</span><input class="input" type="number" min="1" id="qPersonas" value="10" style="width:110px"></label>
+              <label class="field"><span>Días</span><input class="input" type="number" min="1" id="qDias" value="22" style="width:90px"></label>
+              <label class="field"><span>Tipo</span><select class="input" id="qTipo"><option value="normal">Normal</option><option value="hipo">Hipocalórica</option></select></label>
+              <button class="btn mini" type="button" id="qAddPlan">Agregar al detalle</button>
+            </div>
+          </div>
+          <div class="grid2">
+            <label class="field"><span>Descuento (%)</span><input class="input" type="number" min="0" max="100" id="qDescuento" data-q="descuento"></label>
+            <label class="field"><span>Válida por (días)</span><input class="input" type="number" min="1" id="qValidez" data-q="validez"></label>
+          </div>
+          <label class="field"><span>Condiciones o notas</span><textarea class="input" id="qNotas" data-q="notas" placeholder="Ej: forma de pago, horario de entrega, despacho."></textarea></label>
+          <div class="qtot" id="qTotales"></div>
+          <div class="err" id="qErr" hidden></div>
+          <div class="actions" style="justify-content:flex-end"><button class="btn primary" id="qGuardar" type="button">Guardar y ver documento</button></div>
+        </div>
+      </div>
+    </section>
+
     <!-- LOGIN -->
     <section id="v-login" hidden>
       <form class="panel login" id="loginForm">
@@ -362,6 +462,16 @@ body{margin:0}
               <label class="field"><span>PIN nuevo (opcional)</span><input class="input" type="password" id="cfgPin" autocomplete="new-password" placeholder="Mínimo 4 dígitos"></label>
             </div>
           </div>
+          <div class="panel stack">
+            <div><h2>Datos del negocio</h2><p class="sub" style="margin:0">Aparecen en el encabezado de cotizaciones, detalles y balances. Las respuestas a los correos llegan al email de contacto.</p></div>
+            <div class="grid2">
+              <label class="field"><span>Nombre</span><input class="input" id="negNombre" data-neg="nombre"></label>
+              <label class="field"><span>RUT</span><input class="input" id="negRut" data-neg="rut" placeholder="76.123.456-7"></label>
+              <label class="field"><span>Teléfono</span><input class="input" id="negTelefono" data-neg="telefono" placeholder="+56 9 ..."></label>
+              <label class="field"><span>Email de contacto</span><input class="input" id="negEmail" data-neg="email" type="email"></label>
+            </div>
+            <label class="field"><span>Dirección</span><input class="input" id="negDireccion" data-neg="direccion"></label>
+          </div>
           <div class="panel">
             <h2>Empresas con convenio</h2>
             <p class="sub">Entrega a cada empresa su código. Con él entran al portal "Empresas" y anotan a su gente cada día.</p>
@@ -382,6 +492,31 @@ body{margin:0}
   </div>
 </main>
 <div class="wrap foot" id="foot"><a href="#cocina">Acceso cocina</a></div>
+<dialog id="docDlg" aria-labelledby="docTitulo">
+  <div class="dlg">
+    <iframe id="docFrame" title="Vista previa del documento"></iframe>
+    <aside>
+      <div class="toolbar" style="margin:0;align-items:flex-start"><h2 id="docTitulo" style="margin:0">Documento</h2><button class="x" type="button" id="docCerrar" aria-label="Cerrar">×</button></div>
+      <div class="actions">
+        <button class="btn" type="button" id="docPdf">Descargar PDF</button>
+        <button class="btn" type="button" id="docPrint">Imprimir</button>
+      </div>
+      <div class="stack" style="gap:8px">
+        <div class="label">Enviar por correo</div>
+        <input class="input" type="email" id="docPara" placeholder="correo@cliente.cl" aria-label="Correo del destinatario">
+        <textarea class="input" id="docMsg" aria-label="Mensaje">Hola, le adjuntamos el documento. Quedamos atentos a cualquier consulta.</textarea>
+        <button class="btn primary" type="button" id="docEnviar">Enviar con PDF adjunto</button>
+      </div>
+      <div class="stack" style="gap:8px">
+        <div class="label">Enviar por WhatsApp</div>
+        <input class="input" id="docTel" placeholder="+56 9 1234 5678" aria-label="Teléfono WhatsApp">
+        <a class="btn" id="docWa" href="#" target="_blank" rel="noopener" style="text-align:center;text-decoration:none;color:var(--ink)">Abrir WhatsApp con el resumen</a>
+        <button class="btn ghost mini" type="button" id="docCopiar">Copiar resumen</button>
+      </div>
+      <div class="err" id="docErr" hidden></div>
+    </aside>
+  </div>
+</dialog>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -634,7 +769,7 @@ const cnt = os => os.flatMap(o => o.items).reduce((s, i) => s + i.cant, 0);
 const sum = os => os.reduce((s, o) => s + o.total, 0);
 
 function cargarPanel() {
-  return staff('panel', { fecha: $('fechaPanel').value }).then(r => { if (!r.ok) throw new Error(r.error); P = r; renderCocina(); if (!E) editarDesde(P); });
+  return staff('panel', { fecha: $('fechaPanel').value }).then(r => { if (!r.ok) throw new Error(r.error); P = r; renderCocina(); renderDocumentos(); if (!E) editarDesde(P); });
 }
 function renderCocina() {
   if (!P) return;
@@ -702,7 +837,7 @@ $('mesCuentas').onchange = cargarCuentas;
 /* ═════════════ MENÚ DEL DÍA ═════════════ */
 let E = null, dirty = false;   // copia editable
 function editarDesde(p) {
-  E = { fondos: p.fondos.map(f => Object.assign({}, f)), agregados: p.agregados.slice(), empresas: p.empresas.map(e => Object.assign({}, e)), cfg: Object.assign({}, p.cfg) };
+  E = { fondos: p.fondos.map(f => Object.assign({}, f)), agregados: p.agregados.slice(), empresas: p.empresas.map(e => Object.assign({}, e)), cfg: Object.assign({}, p.cfg, { negocio: Object.assign({}, p.cfg.negocio) }) };
   setDirty(false); renderMenu();
 }
 function setDirty(v) { dirty = v; $('dirty').hidden = !v; }
@@ -731,12 +866,19 @@ function renderMenu() {
     <input class="input" data-k="${k}" data-e="nombre" value="${esc(e.nombre)}" aria-label="Nombre de la empresa">
     <input class="input" data-k="${k}" data-e="codigo" value="${esc(e.codigo)}" aria-label="Código" placeholder="Se genera solo" style="text-transform:uppercase">
     <button type="button" class="x" data-del="${k}" aria-label="Quitar ${esc(e.nombre)}">×</button>
-  </div>`).join('') + '<div class="sub" style="margin:8px 0 0">Nombre · código para entrar al portal de empresas</div>' : '<span class="sub">Aún no hay empresas.</span>';
+    <div class="more">
+      <input class="input" data-k="${k}" data-e="contacto" value="${esc(e.contacto || '')}" placeholder="Contacto" aria-label="Contacto">
+      <input class="input" data-k="${k}" data-e="email" type="email" value="${esc(e.email || '')}" placeholder="Email para detalles" aria-label="Email">
+      <input class="input" data-k="${k}" data-e="rut" value="${esc(e.rut || '')}" placeholder="RUT" aria-label="RUT">
+    </div>
+  </div>`).join('') + '<div class="sub" style="margin:8px 0 0">Nombre · código del portal · contacto, email y RUT para los detalles de consumo</div>' : '<span class="sub">Aún no hay empresas.</span>';
   $('empresasEdit').querySelectorAll('[data-e]').forEach(inp => inp.onchange = () => { E.empresas[+inp.dataset.k][inp.dataset.e] = inp.value; setDirty(true); });
   $('empresasEdit').querySelectorAll('[data-del]').forEach(b => b.onclick = () => { E.empresas.splice(+b.dataset.del, 1); setDirty(true); renderMenu(); });
 
   $('cfgPrecio').value = E.cfg.precio; $('cfgHipo').value = E.cfg.hipo; $('cfgCierre').value = E.cfg.cierre; $('cfgPin').value = '';
+  document.querySelectorAll('[data-neg]').forEach(i => i.value = (E.cfg.negocio || {})[i.dataset.neg] || '');
 }
+document.querySelectorAll('[data-neg]').forEach(i => i.onchange = () => { E.cfg.negocio = E.cfg.negocio || {}; E.cfg.negocio[i.dataset.neg] = i.value; setDirty(true); });
 [['cfgPrecio', 'precio', true], ['cfgHipo', 'hipo', true], ['cfgCierre', 'cierre', false]].forEach(([id, k, num]) =>
   $(id).onchange = e => { E.cfg[k] = num ? Math.max(0, parseInt(e.target.value) || 0) : e.target.value; setDirty(true); });
 $('cfgPin').oninput = () => setDirty(true);
@@ -756,23 +898,223 @@ $('guardar').onclick = () => {
     .then(r => {
       if (!r.ok) throw new Error(r.error);
       if (pinNuevo) setPin(pinNuevo);
-      P = r; editarDesde(P); renderCocina(); cargarMenu(); toast('Menú guardado');
+      P = r; editarDesde(P); renderCocina(); renderDocumentos(); cargarMenu(); toast('Menú guardado');
     })
     .catch(e => toast('No se guardó: ' + e.message))
     .finally(() => $('guardar').disabled = false);
 };
 
+/* ═════════════ FECHAS ═════════════ */
+const isoDe = d => d.toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+const ddmm = iso => iso.split('-').reverse().join('-');
+function preset(k) {
+  const h = new Date(hoyISO + 'T12:00:00'), y = h.getFullYear(), m = h.getMonth();
+  if (k === 'hoy') return [hoyISO, hoyISO];
+  if (k === 'semana') { const d = new Date(h); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return [isoDe(d), hoyISO]; }
+  if (k === 'mes') return [hoyISO.slice(0, 8) + '01', hoyISO];
+  if (k === 'mesAnt') return [isoDe(new Date(y, m - 1, 1, 12)), isoDe(new Date(y, m, 0, 12))];
+  if (k === 'anio') return [y + '-01-01', hoyISO];
+}
+function presetChips(el, keys, onPick) {
+  const t = { hoy: 'Hoy', semana: 'Esta semana', mes: 'Este mes', mesAnt: 'Mes anterior', anio: 'Este año' };
+  el.innerHTML = keys.map(k => `<button type="button" class="chip" data-p="${k}">${t[k]}</button>`).join('');
+  el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { el.querySelectorAll('[data-p]').forEach(x => x.setAttribute('aria-pressed', x === b)); onPick(preset(b.dataset.p)); });
+}
+
+/* ═════════════ BALANCES ═════════════ */
+const pl = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
+let BAL = null;
+presetChips($('balPresets'), ['hoy', 'semana', 'mes', 'mesAnt', 'anio'], ([d, h]) => { $('balDesde').value = d; $('balHasta').value = h; cargarBalance(); });
+['balDesde', 'balHasta'].forEach(id => $(id).oninput = () => $('balPresets').querySelectorAll('[data-p]').forEach(x => x.setAttribute('aria-pressed', 'false')));
+$('balVer').onclick = () => cargarBalance();
+function cargarBalance() {
+  $('balOut').innerHTML = '<div class="loading">Calculando…</div>';
+  staff('balance', { desde: $('balDesde').value, hasta: $('balHasta').value }).then(r => {
+    if (!r.ok) throw new Error(r.error);
+    BAL = r; renderBalance();
+  }).catch(e => $('balOut').innerHTML = `<div class="err" style="margin-top:18px">${esc(e.message)}</div>`);
+}
+function renderBalance() {
+  const b = BAL, R = b.resumen;
+  const maxPlato = Math.max(1, ...b.porPlato.map(x => x.colaciones)), maxDia = Math.max(1, ...b.porDia.map(x => x.total));
+  const tabla = (head, rows, foot) => `<div class="tablewrap"><table><tr>${head.map(h => `<th class="${h.n ? 'n' : ''}">${h.t}</th>`).join('')}</tr>${rows.join('')}${foot || ''}</table></div>`;
+  $('balOut').innerHTML = `
+    <div class="kpis">
+      <div class="panel kpi"><div class="label">Total vendido</div><div class="big">${clp(R.total.total)}</div><div class="sub" style="margin:0">${ddmm(b.desde)} al ${ddmm(b.hasta)}</div></div>
+      <div class="panel kpi"><div class="label">Colaciones</div><div class="big">${R.total.colaciones}</div><div class="sub" style="margin:0">${pl(R.hipo, 'hipocalórica', 'hipocalóricas')} · ${pl(b.porDia.length, 'día', 'días')} con venta</div></div>
+      <div class="panel kpi"><div class="label">Público general</div><div class="big">${clp(R.publico.total)}</div><div class="sub" style="margin:0">${clp(R.cobrado.total)} cobrado · <b>${clp(R.porCobrar.total)} por cobrar</b></div></div>
+      <div class="panel kpi"><div class="label">Empresas a cuenta</div><div class="big">${clp(R.empresas.total)}</div><div class="sub" style="margin:0">${pl(R.empresas.colaciones, 'colación', 'colaciones')} · ${pl(b.porEmpresa.length, 'empresa', 'empresas')}</div></div>
+    </div>
+    <div class="actions" style="margin-bottom:18px">
+      <button class="btn" type="button" id="balCsv">Descargar Excel (CSV)</button>
+      <button class="btn primary" type="button" id="balDoc">PDF / enviar por correo</button>
+    </div>
+    <div class="two">
+      <div class="stack">
+        <div class="panel"><h3>Por empresa</h3>${b.porEmpresa.length ? tabla([{ t: 'Empresa' }, { t: 'Días', n: 1 }, { t: 'Colaciones', n: 1 }, { t: 'Monto', n: 1 }],
+          b.porEmpresa.map(e => `<tr><td>${esc(e.empresa)}</td><td class="n">${e.dias}</td><td class="n">${e.colaciones}</td><td class="n">${clp(e.total)}</td></tr>`),
+          `<tr><th>Total</th><th class="n"></th><th class="n">${R.empresas.colaciones}</th><th class="n">${clp(R.empresas.total)}</th></tr>`) : '<p class="sub">Sin consumo de empresas en el período.</p>'}</div>
+        <div class="panel"><h3>Por plato</h3>${b.porPlato.length ? tabla([{ t: 'Plato' }, { t: '' }, { t: 'Colaciones', n: 1 }, { t: 'Monto', n: 1 }],
+          b.porPlato.map(x => `<tr><td>${esc(x.fondo)}${x.hipo ? `<div class="sub" style="margin:0">${pl(x.hipo, 'hipocalórica', 'hipocalóricas')}</div>` : ''}</td><td style="width:30%"><div class="meter"><i style="width:${Math.round(x.colaciones / maxPlato * 100)}%"></i></div></td><td class="n">${x.colaciones}</td><td class="n">${clp(x.total)}</td></tr>`)) : '<p class="sub">Sin ventas.</p>'}
+          <div class="breakdown" style="margin-top:10px">${b.porAgregado.map(a => `<span class="pill ${a.agregado === 'Hipocalórico' ? 'accent' : 'neutral'}">${esc(a.agregado)} ${a.colaciones}</span>`).join('')}</div></div>
+      </div>
+      <div class="panel"><h3>Por día</h3>${b.porDia.length ? tabla([{ t: 'Fecha' }, { t: 'Público', n: 1 }, { t: 'Empresas', n: 1 }, { t: '' }, { t: 'Monto', n: 1 }],
+        b.porDia.map(d => `<tr><td>${new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' })}</td><td class="n">${d.publico}</td><td class="n">${d.empresas}</td><td style="width:22%"><div class="meter"><i style="width:${Math.round(d.total / maxDia * 100)}%"></i></div></td><td class="n">${clp(d.total)}</td></tr>`),
+        `<tr><th>Total</th><th class="n">${R.publico.colaciones}</th><th class="n">${R.empresas.colaciones}</th><th></th><th class="n">${clp(R.total.total)}</th></tr>`) : '<p class="sub">Sin ventas en el período.</p>'}</div>
+    </div>`;
+  $('balCsv').onclick = descargarCsv;
+  $('balDoc').onclick = () => abrirDoc({ tipo: 'balance', desde: b.desde, hasta: b.hasta });
+}
+function descargarArchivo(nombre, blob) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function descargarCsv() {
+  const b = BAL, R = b.resumen, q = v => /[;"\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v;
+  const L = [['Balance', ddmm(b.desde), ddmm(b.hasta)], [],
+    ['Concepto', 'Pedidos', 'Colaciones', 'Monto'],
+    ['Público cobrado', R.cobrado.pedidos, R.cobrado.colaciones, R.cobrado.total], ['Público por cobrar', R.porCobrar.pedidos, R.porCobrar.colaciones, R.porCobrar.total],
+    ['Empresas a cuenta', R.empresas.pedidos, R.empresas.colaciones, R.empresas.total], ['Total', R.total.pedidos, R.total.colaciones, R.total.total], [],
+    ['Fecha', 'Público', 'Empresas', 'Colaciones', 'Monto'], ...b.porDia.map(d => [ddmm(d.fecha), d.publico, d.empresas, d.colaciones, d.total]), [],
+    ['Plato', 'Colaciones', 'Hipocalóricas', 'Monto'], ...b.porPlato.map(x => [x.fondo, x.colaciones, x.hipo, x.total]), [],
+    ['Empresa', 'Días', 'Colaciones', 'Monto'], ...b.porEmpresa.map(e => [e.empresa, e.dias, e.colaciones, e.total])];
+  descargarArchivo(`Balance ${b.desde} a ${b.hasta}.csv`, new Blob(['﻿' + L.map(r => r.map(q).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+}
+
+/* ═════════════ DOCUMENTO (vista previa, PDF, correo, WhatsApp) ═════════════ */
+let DOC = null, DOCR = null;
+function abrirDoc(params) {
+  DOC = params; showErr($('docErr'), '');
+  $('docFrame').srcdoc = '<p style="font-family:sans-serif;color:#777;padding:24px">Preparando documento…</p>';
+  if (!$('docDlg').open) $('docDlg').showModal();
+  staff('documento', params).then(r => {
+    if (!r.ok) throw new Error(r.error);
+    DOCR = r;
+    $('docTitulo').textContent = r.titulo;
+    $('docFrame').srcdoc = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(r.archivo) + '</title></head><body style="margin:24px;background:#fff">' + r.html + '</body></html>';
+    $('docPara').value = r.para || ''; $('docTel').value = r.telefono || '';
+    actualizarWa();
+  }).catch(e => showErr($('docErr'), e.message));
+}
+function actualizarWa() {
+  const tel = $('docTel').value.replace(/\D/g, '');
+  $('docWa').href = 'https://wa.me/' + tel + '?text=' + encodeURIComponent(DOCR ? DOCR.texto : '');
+}
+$('docTel').oninput = actualizarWa;
+$('docCerrar').onclick = () => $('docDlg').close();
+$('docPrint').onclick = () => { try { $('docFrame').contentWindow.focus(); $('docFrame').contentWindow.print(); } catch (e) { toast('Usa "Descargar PDF" e imprímelo desde ahí.'); } };
+$('docPdf').onclick = () => {
+  const b = $('docPdf'); b.disabled = true; b.textContent = 'Generando PDF…';
+  staff('pdf', DOC).then(r => {
+    if (!r.ok) throw new Error(r.error);
+    const bin = atob(r.base64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    descargarArchivo(r.nombre, new Blob([bytes], { type: 'application/pdf' }));
+  }).catch(e => showErr($('docErr'), 'No se pudo generar el PDF: ' + e.message))
+    .finally(() => { b.disabled = false; b.textContent = 'Descargar PDF'; });
+};
+$('docEnviar').onclick = () => {
+  const para = $('docPara').value.trim();
+  if (!para) { showErr($('docErr'), 'Escribe el correo del destinatario.'); $('docPara').focus(); return; }
+  const b = $('docEnviar'); b.disabled = true; b.textContent = 'Enviando…'; showErr($('docErr'), '');
+  staff('enviar', Object.assign({}, DOC, { para, mensaje: $('docMsg').value })).then(r => {
+    if (!r.ok) throw new Error(r.error);
+    toast('Enviado a ' + r.enviadoA);
+    if (DOC.tipo === 'cotizacion') cargarCotizaciones();
+  }).catch(e => showErr($('docErr'), 'No se envió: ' + e.message))
+    .finally(() => { b.disabled = false; b.textContent = 'Enviar con PDF adjunto'; });
+};
+$('docCopiar').onclick = () => {
+  const t = DOCR ? DOCR.texto : '';
+  navigator.clipboard.writeText(t).then(() => toast('Resumen copiado')).catch(() => { $('docMsg').value = t; $('docMsg').select(); toast('Selecciona y copia el texto'); });
+};
+
+/* ═════════════ DETALLE A EMPRESA ═════════════ */
+presetChips($('detPresets'), ['mes', 'mesAnt', 'semana'], ([d, h]) => { $('detDesde').value = d; $('detHasta').value = h; });
+$('detVer').onclick = () => {
+  if (!$('detEmpresa').value) { toast('Primero agrega empresas en "Menú del día".'); return; }
+  abrirDoc({ tipo: 'detalle', empresaId: $('detEmpresa').value, desde: $('detDesde').value, hasta: $('detHasta').value });
+};
+function renderDocumentos() {
+  if (!P) return;
+  const sel = $('detEmpresa'), cur = sel.value;
+  sel.innerHTML = P.empresas.length ? P.empresas.map(e => `<option value="${esc(e.id)}">${esc(e.nombre)}</option>`).join('') : '<option value="">Sin empresas</option>';
+  if (P.empresas.some(e => e.id === cur)) sel.value = cur;
+  if (!Q.lineas.length && !Q.id) renderQ();
+}
+
+/* ═════════════ COTIZACIONES ═════════════ */
+let QS = [];
+const qVacia = () => ({ id: null, n: null, cliente: '', rut: '', contacto: '', email: '', telefono: '', lineas: [], descuento: 0, validez: 15, notas: '' });
+let Q = qVacia();
+function cargarCotizaciones() {
+  return staff('cotizaciones').then(r => { if (!r.ok) throw new Error(r.error); QS = r.cotizaciones; renderQLista(); }).catch(e => toast(e.message));
+}
+function renderQLista() {
+  $('qLista').innerHTML = QS.length ? '<tr><th>N°</th><th>Cliente</th><th class="n">Total</th><th>Estado</th><th></th></tr>' + QS.map(q => `<tr>
+    <td>${q.n}<div class="sub" style="margin:0">${ddmm(q.fecha)}</div></td><td>${esc(q.cliente)}</td><td class="n">${clp(q.total)}</td>
+    <td><span class="pill ${q.estado === 'enviada' ? 'ok' : 'neutral'}">${q.estado === 'enviada' ? 'Enviada' : 'Borrador'}</span></td>
+    <td class="n"><button type="button" class="btn mini" data-qe="${esc(q.id)}">Editar</button> <button type="button" class="btn mini" data-qv="${esc(q.id)}">Ver</button></td></tr>`).join('')
+    : '<tr><td class="sub">Todavía no hay cotizaciones.</td></tr>';
+  $('qLista').querySelectorAll('[data-qe]').forEach(b => b.onclick = () => { Q = JSON.parse(JSON.stringify(QS.find(x => x.id === b.dataset.qe))); renderQ(); $('qForm').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  $('qLista').querySelectorAll('[data-qv]').forEach(b => b.onclick = () => abrirDoc({ tipo: 'cotizacion', id: b.dataset.qv }));
+}
+function qTotales() {
+  const sub = Q.lineas.reduce((s, l) => s + (Number(l.cantidad) || 0) * (Number(l.precio) || 0), 0);
+  const desc = Math.round(sub * Math.min(100, Math.max(0, Number(Q.descuento) || 0)) / 100);
+  $('qTotales').innerHTML = `<span>Subtotal ${clp(sub)}</span>${desc ? `<span>Descuento −${clp(desc)}</span>` : ''}<b>Total ${clp(sub - desc)}</b>`;
+}
+function renderQ() {
+  $('qTitulo').textContent = Q.n ? 'Cotización N° ' + Q.n : 'Nueva cotización';
+  document.querySelectorAll('[data-q]').forEach(i => i.value = Q[i.dataset.q] ?? '');
+  $('qLineas').innerHTML = Q.lineas.length ? '<tr><th>Descripción</th><th class="n">Cantidad</th><th class="n">Precio</th><th class="n">Total</th><th></th></tr>' + Q.lineas.map((l, k) => `<tr>
+    <td><input class="input" data-l="${k}" data-c="descripcion" value="${esc(l.descripcion)}" aria-label="Descripción"></td>
+    <td><input class="input cant" type="number" min="0" data-l="${k}" data-c="cantidad" value="${l.cantidad}" aria-label="Cantidad"></td>
+    <td><input class="input precio" type="number" min="0" step="100" data-l="${k}" data-c="precio" value="${l.precio}" aria-label="Precio unitario"></td>
+    <td class="n" id="qlt-${k}">${clp(l.cantidad * l.precio)}</td>
+    <td><button type="button" class="x" data-ldel="${k}" aria-label="Quitar línea">×</button></td></tr>`).join('')
+    : '<tr><td class="sub">Agrega colaciones con los botones de abajo.</td></tr>';
+  $('qLineas').querySelectorAll('[data-l]').forEach(i => i.oninput = () => {
+    const l = Q.lineas[+i.dataset.l]; l[i.dataset.c] = i.dataset.c === 'descripcion' ? i.value : Number(i.value) || 0;
+    $('qlt-' + i.dataset.l).textContent = clp(l.cantidad * l.precio); qTotales();
+  });
+  $('qLineas').querySelectorAll('[data-ldel]').forEach(b => b.onclick = () => { Q.lineas.splice(+b.dataset.ldel, 1); renderQ(); });
+  qTotales(); showErr($('qErr'), '');
+}
+document.querySelectorAll('[data-q]').forEach(i => i.oninput = () => { Q[i.dataset.q] = i.type === 'number' ? Number(i.value) || 0 : i.value; qTotales(); });
+const precios = () => P ? P.cfg : { precio: 5000, hipo: 1000 };
+const addLinea = l => { Q.lineas.push(l); renderQ(); };
+$('qAddNormal').onclick = () => addLinea({ descripcion: 'Colación normal (fondo, agregado, sopa, ensalada, pan y jugo)', cantidad: 1, precio: precios().precio });
+$('qAddHipo').onclick = () => addLinea({ descripcion: 'Colación hipocalórica (sin carbohidrato)', cantidad: 1, precio: precios().precio + precios().hipo });
+$('qAddLinea').onclick = () => addLinea({ descripcion: '', cantidad: 1, precio: 0 });
+$('qAddPlan').onclick = () => {
+  const n = Math.max(1, parseInt($('qPersonas').value) || 1), d = Math.max(1, parseInt($('qDias').value) || 1), hipo = $('qTipo').value === 'hipo';
+  addLinea({ descripcion: `Colación ${hipo ? 'hipocalórica' : 'normal'} · ${n} personas × ${d} días`, cantidad: n * d, precio: precios().precio + (hipo ? precios().hipo : 0) });
+};
+$('qNueva').onclick = () => { Q = qVacia(); renderQ(); };
+$('qGuardar').onclick = () => {
+  const b = $('qGuardar'); b.disabled = true; showErr($('qErr'), '');
+  staff('guardarCotizacion', Q).then(r => {
+    if (!r.ok) throw new Error(r.error);
+    Q = r.cotizacion; renderQ(); toast('Cotización N° ' + Q.n + ' guardada');
+    cargarCotizaciones(); abrirDoc({ tipo: 'cotizacion', id: Q.id });
+  }).catch(e => showErr($('qErr'), e.message)).finally(() => b.disabled = false);
+};
+
 /* ═════════════ NAVEGACIÓN ═════════════ */
-const VIEWS = ['pedir', 'empresa', 'cocina', 'menu', 'login'];
+const VIEWS = ['pedir', 'empresa', 'cocina', 'menu', 'balances', 'documentos', 'login'];
+const STAFF_VIEWS = ['cocina', 'menu', 'balances', 'documentos'];
 function route() {
   let v = location.hash.slice(1); if (!VIEWS.includes(v) || v === 'login') v = 'pedir';
   const logged = !!getPin();
-  const show = (v === 'cocina' || v === 'menu') && !logged ? 'login' : v;
+  const show = STAFF_VIEWS.includes(v) && !logged ? 'login' : v;
   VIEWS.forEach(x => $('v-' + x).hidden = x !== show);
   document.querySelectorAll('[data-staff]').forEach(a => a.hidden = !logged);
   $('foot').hidden = logged;
   document.querySelectorAll('nav.tabs a').forEach(a => a.dataset.view === v ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
-  if (logged && (v === 'cocina' || v === 'menu') && !P) { cargarPanel().catch(e => toast(e.message)); cargarCuentas(); }
+  if (logged && STAFF_VIEWS.includes(v) && !P) { cargarPanel().catch(e => toast(e.message)); cargarCuentas(); }
+  if (logged && v === 'balances' && !BAL) $('balPresets').querySelector('[data-p="mes"]').click();
+  if (logged && v === 'documentos' && !QS.length) cargarCotizaciones();
   if (show === 'login') setTimeout(() => $('pin').focus(), 0);
   if (v === 'empresa' && !ES) { const c = new URLSearchParams(location.search).get('empresa') || lsGet(EMP_KEY); if (c) { $('empCodigo').value = c; empEntrar(c.toUpperCase(), true); } }
 }
@@ -790,6 +1132,7 @@ setInterval(() => {
 
 const hoyISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
 $('fechaPanel').value = hoyISO; $('mesCuentas').value = $('empMes').value = hoyISO.slice(0, 7);
+[$('balDesde').value, $('balHasta').value] = preset('mes'); [$('detDesde').value, $('detHasta').value] = preset('mesAnt');
 $('today').textContent = new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Santiago' });
 route(); cargarMenu();
 </script>
